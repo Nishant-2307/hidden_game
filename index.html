@@ -1,863 +1,988 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <title>Hidden Card Game — Demo</title>
-  <style>
-    body { font-family: 'Segoe UI', Tahoma, sans-serif; margin:0; background:#f1f5f9; color:#1e293b; }
-    header { background:#2563eb; color:#fff; padding:18px 20px; font-size:24px; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,.15); }
-    main { max-width:1100px; margin:24px auto; padding:0 16px; }
-    section { background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 12px rgba(0,0,0,.08); margin-bottom:18px; }
-    h3 { margin:8px 0 12px; }
-    .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    button { background:#2563eb; color:#fff; border:none; border-radius:8px; padding:10px 14px; font-size:15px; cursor:pointer; }
-    button:disabled { background:#94a3b8; cursor:not-allowed; }
-    select,input { padding:8px; border-radius:8px; border:1px solid #cbd5e1; }
-    #historyLog p { background:#f8fafc; margin:6px 0; padding:10px; border-left:4px solid #2563eb; border-radius:4px; }
-    #lastResult { background:#f0fdfa; padding:12px; border-left:4px solid #14b8a6; border-radius:8px; margin-top:10px; }
-    details { border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; background:#f8fafc; margin-bottom:10px; }
-    .entropyBox { margin-top:10px; padding:8px; background:#eef2ff; border-radius:6px; }
-    .distributionBar { height:10px; background:#c7d2fe; border-radius:6px; }
-    .muted { color:#475569; }
-    .small { font-size:13px; color:#475569; }
-    table { border-collapse: collapse; width:100%; }
-    td,th { padding:6px 8px; border-bottom:1px solid #edf2f7; }
-  </style>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Hidden Card Game</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #12121a;
+    --surface2: #1a1a27;
+    --border: #2a2a40;
+    --gold: #c9a84c;
+    --gold-light: #f0d080;
+    --gold-dim: #6a5020;
+    --text: #e8e0d0;
+    --text-dim: #7a7060;
+    --red: #c04040;
+    --green: #40a060;
+    --blue: #4070c0;
+    --purple: #7040a0;
+    --accent: #c9a84c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Crimson Pro', serif;
+    font-size: 17px;
+    min-height: 100vh;
+    background-image:
+      radial-gradient(ellipse at 20% 20%, rgba(201,168,76,0.04) 0%, transparent 60%),
+      radial-gradient(ellipse at 80% 80%, rgba(112,64,160,0.04) 0%, transparent 60%);
+  }
+  h1, h2, h3 { font-family: 'Cinzel', serif; letter-spacing: 0.05em; }
+
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 18px 30px;
+    display: flex; align-items: center; gap: 16px;
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(10px);
+    position: sticky; top: 0; z-index: 100;
+  }
+  header h1 { font-size: 1.3rem; color: var(--gold); font-weight: 900; }
+  .tagline { color: var(--text-dim); font-style: italic; font-size: 0.9rem; }
+  .strategy-toggle { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .strategy-toggle label { color: var(--text-dim); font-size: 0.85rem; }
+  .strategy-toggle select {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); padding: 4px 8px; border-radius: 4px;
+    font-family: 'Crimson Pro', serif; font-size: 0.9rem; cursor: pointer;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 24px;
+    max-width: 1300px;
+    margin: 0 auto;
+    padding: 24px;
+  }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+  }
+  .panel h2 {
+    font-size: 0.75rem; color: var(--gold); text-transform: uppercase;
+    letter-spacing: 0.15em; margin-bottom: 16px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .panel h2::after {
+    content: ''; flex: 1; height: 1px;
+    background: linear-gradient(90deg, var(--border), transparent);
+  }
+
+  /* Welcome */
+  #welcome-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 80vh; gap: 30px; text-align: center;
+  }
+  .welcome-title {
+    font-family: 'Cinzel', serif; font-size: 3.5rem; color: var(--gold);
+    font-weight: 900; line-height: 1.1;
+    text-shadow: 0 0 40px rgba(201,168,76,0.3);
+  }
+  .welcome-sub { color: var(--text-dim); font-size: 1.1rem; max-width: 500px; font-style: italic; line-height: 1.7; }
+  .welcome-rules {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 24px 32px; text-align: left; max-width: 560px; width: 100%;
+  }
+  .welcome-rules h3 { color: var(--gold); margin-bottom: 12px; font-size: 0.85rem; letter-spacing: 0.1em; text-transform: uppercase; }
+  .welcome-rules ul { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .welcome-rules li { padding-left: 20px; position: relative; color: var(--text); line-height: 1.5; font-size: 0.95rem; }
+  .welcome-rules li::before { content: '◆'; position: absolute; left: 0; color: var(--gold-dim); font-size: 0.6rem; top: 5px; }
+  .query-preview { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+  .qp-set {
+    border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px;
+    font-size: 0.85rem; color: var(--text-dim); font-family: 'Cinzel', serif;
+    background: var(--surface2);
+  }
+
+  /* Buttons */
+  .btn {
+    font-family: 'Cinzel', serif; font-size: 0.8rem; letter-spacing: 0.1em;
+    text-transform: uppercase; padding: 10px 22px; border: none;
+    cursor: pointer; transition: all 0.2s; border-radius: 6px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .btn-primary { background: linear-gradient(135deg, var(--gold-dim), var(--gold)); color: #0a0a0f; font-weight: 700; }
+  .btn-primary:hover { filter: brightness(1.15); transform: translateY(-1px); box-shadow: 0 4px 20px rgba(201,168,76,0.3); }
+  .btn-secondary { background: var(--surface2); border: 1px solid var(--border); color: var(--text-dim); }
+  .btn-secondary:hover { border-color: var(--gold-dim); color: var(--gold); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none !important; }
+
+  /* Cards */
+  .cards-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .card {
+    width: 46px; height: 66px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Cinzel', serif; font-weight: 700; font-size: 1.1rem;
+    border: 1px solid; cursor: default;
+    transition: all 0.15s; position: relative; flex-shrink: 0;
+  }
+  .card-player {
+    background: linear-gradient(145deg, #1e1e30, #12122a);
+    border-color: var(--blue); color: #80a0f0;
+    box-shadow: 0 2px 8px rgba(64,112,192,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+  .card-hidden { background: linear-gradient(145deg, #1a1015, #100a0f); border-color: var(--purple); color: var(--purple); }
+  .card-known { background: linear-gradient(145deg, #0f1a0f, #0a120a); border-color: var(--green); color: #60c080; }
+
+  /* Query grid */
+  .query-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 4px; }
+  .query-row {
+    display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 8px;
+    cursor: pointer; transition: all 0.15s; background: var(--surface2);
+  }
+  .query-row:hover { border-color: var(--gold-dim); }
+  .query-row.selected { border-color: var(--gold); background: rgba(201,168,76,0.06); }
+  .query-row.recommended { border-color: var(--green); background: rgba(64,160,96,0.06); }
+  .query-label { font-size: 0.75rem; color: var(--text-dim); font-family: 'Cinzel', serif; min-width: 55px; }
+  .query-cards-row { display: flex; gap: 4px; }
+  .qcard {
+    width: 38px; height: 52px; border-radius: 5px; display: flex; align-items: center;
+    justify-content: center; font-family: 'Cinzel', serif; font-weight: 700; font-size: 0.95rem;
+    border: 1px solid var(--gold-dim); color: var(--gold);
+    background: linear-gradient(145deg, #1e1a10, #12100a);
+    transition: all 0.15s;
+  }
+  .query-row.selected .qcard { border-color: var(--gold-light); color: var(--gold-light); box-shadow: 0 0 10px rgba(201,168,76,0.3); }
+  .query-row.recommended .qcard { border-color: var(--green); color: #60c080; }
+  .rec-badge { font-size: 0.7rem; color: var(--green); font-family: 'Cinzel', serif; margin-left: auto; white-space: nowrap; }
+  .query-score { font-size: 0.72rem; color: var(--text-dim); margin-left: 4px; }
+
+  /* Target */
+  .target-row { display: flex; gap: 8px; margin-top: 6px; }
+  .target-btn {
+    flex: 1; padding: 10px; border: 1px solid var(--border);
+    background: var(--surface2); border-radius: 6px; cursor: pointer;
+    text-align: center; transition: all 0.15s; color: var(--text-dim);
+    font-family: 'Cinzel', serif; font-size: 0.8rem;
+  }
+  .target-btn:hover { border-color: var(--gold-dim); color: var(--text); }
+  .target-btn.selected { border-color: var(--gold); color: var(--gold); background: rgba(201,168,76,0.08); }
+
+  /* History */
+  .history-list { display: flex; flex-direction: column; gap: 6px; max-height: 260px; overflow-y: auto; }
+  .history-item {
+    padding: 8px 12px; border-radius: 6px; font-size: 0.88rem;
+    border-left: 3px solid; background: var(--surface2); line-height: 1.4;
+  }
+  .history-item.you { border-color: var(--blue); }
+  .history-item.bot1 { border-color: var(--text-dim); }
+  .history-item.bot2 { border-color: var(--purple); }
+  .history-who { font-family: 'Cinzel', serif; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 2px; }
+  .history-item.you .history-who { color: var(--blue); }
+  .history-item.bot1 .history-who { color: var(--text-dim); }
+  .history-item.bot2 .history-who { color: var(--purple); }
+  .history-detail { color: var(--text-dim); }
+  .history-detail span { color: var(--text); }
+
+  /* Status */
+  .status-bar {
+    margin-bottom: 16px; padding: 12px 16px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface2);
+    display: flex; align-items: center; gap: 12px;
+  }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .status-dot.active { background: var(--gold); box-shadow: 0 0 8px var(--gold); animation: pulse 2s infinite; }
+  .status-dot.idle { background: var(--text-dim); }
+  .status-dot.win { background: var(--green); box-shadow: 0 0 10px var(--green); }
+  @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.4 } }
+  .status-text { font-size: 0.9rem; }
+
+  /* Win */
+  .win-banner {
+    text-align: center; padding: 30px; margin-bottom: 20px;
+    border: 1px solid var(--gold); border-radius: 12px;
+    background: linear-gradient(135deg, rgba(201,168,76,0.08), rgba(201,168,76,0.02));
+    animation: glow-in 0.6s ease;
+  }
+  @keyframes glow-in { from { opacity:0; transform:scale(0.95) } to { opacity:1; transform:scale(1) } }
+  .win-title { font-size: 2rem; font-family: 'Cinzel', serif; margin-bottom: 8px; }
+  .win-sub { color: var(--text-dim); font-style: italic; margin-bottom: 16px; }
+
+  /* Knowledge */
+  .knowledge-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-top: 8px; }
+  .knowledge-col { border: 1px solid var(--border); border-radius: 8px; padding: 10px; background: var(--surface2); }
+  .knowledge-col h4 { font-family: 'Cinzel', serif; font-size: 0.7rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 8px; }
+  .knowledge-col.you-col h4 { color: var(--blue); }
+  .kc { width: 28px; height: 38px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 0.8rem; font-family: 'Cinzel', serif; }
+  .knowledge-certain { display: flex; flex-wrap: wrap; gap: 4px; }
+
+  /* Beliefs */
+  .belief-pip {
+    width: 32px; height: 44px; border-radius: 4px; display: flex; align-items: center;
+    justify-content: center; font-family: 'Cinzel', serif; font-size: 0.8rem;
+    border: 1px solid; transition: all 0.2s;
+  }
+  .belief-pip.candidate { border-color: var(--purple); color: var(--purple); background: rgba(112,64,160,0.12); }
+  .belief-pip.eliminated { border-color: var(--border); color: var(--text-dim); background: var(--surface2); }
+
+  /* Rewind */
+  .rewind-bar {
+    display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface2); margin-top: 16px;
+  }
+  .rewind-bar label { font-size: 0.8rem; color: var(--text-dim); font-family: 'Cinzel', serif; white-space: nowrap; }
+  .rewind-bar input[type=range] { flex: 1; accent-color: var(--gold); height: 4px; }
+  .rewind-step { font-size: 0.8rem; color: var(--gold); min-width: 50px; text-align: right; }
+
+  /* Shannon dist bar */
+  .dist-bar { margin-top: 8px; }
+  .dist-row { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+  .dist-label { font-family: 'Cinzel', serif; font-size: 0.7rem; color: var(--text-dim); width: 18px; text-align: right; }
+  .dist-fill-bg { flex: 1; height: 10px; background: var(--surface2); border-radius: 5px; overflow: hidden; border: 1px solid var(--border); }
+  .dist-fill { height: 100%; background: var(--purple); border-radius: 5px; transition: width 0.4s; }
+  .dist-pct { font-size: 0.7rem; color: var(--text-dim); width: 36px; }
+
+  .section-gap { margin-top: 16px; }
+  .flex-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .badge { font-family: 'Cinzel', serif; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.1em; padding: 2px 8px; border-radius: 20px; border: 1px solid; }
+  .badge-blue { border-color: var(--blue); color: var(--blue); }
+  .empty-msg { color: var(--text-dim); font-style: italic; font-size: 0.9rem; }
+  .sidebar { display: flex; flex-direction: column; gap: 16px; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .sidebar { order: -1; }
+    .welcome-title { font-size: 2.2rem; }
+  }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--surface); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--gold-dim); }
+  .fade-in { animation: fadeIn 0.3s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(4px) } to { opacity:1; transform:translateY(0) } }
+</style>
 </head>
 <body>
-<header>Hidden Card Game — Demo</header>
-<main>
 
-  <section>
-    <h3>Strategy</h3>
-    <div class="controls">
-      <label for="strategySelect">Mode:</label>
-      <select id="strategySelect">
-        <option value="info">Information gain (original)</option>
-        <option value="shannon">Shannon entropy</option>
-      </select>
-      <button id="applyStrategyBtn">Apply</button>
-      <div id="strategyDescription" class="muted small">Using Information gain heuristic</div>
+<header>
+  <h1>⟡ Hidden Card Game</h1>
+  <span class="tagline">An epistemic deduction challenge</span>
+  <div class="strategy-toggle">
+    <label>AI Strategy:</label>
+    <select id="strategy-select" onchange="setStrategy(this.value)">
+      <option value="score">Information Split</option>
+      <option value="shannon">Shannon Entropy</option>
+    </select>
+    <button class="btn btn-secondary" onclick="newGame()" id="new-game-btn" style="display:none">↺ New Game</button>
+  </div>
+</header>
+
+<!-- WELCOME -->
+<div id="welcome-screen">
+  <div class="welcome-title">The Hidden<br/>Card Game</div>
+  <p class="welcome-sub">Ten cards. Three players. One hidden. Use logical queries to deduce the mystery card before your opponents do.</p>
+  <div class="welcome-rules">
+    <h3>How to Play</h3>
+    <ul>
+      <li>Cards 1–10 are dealt: 3 to you, 3 to Bot 1, 3 to Bot 2, and 1 remains hidden.</li>
+      <li>Each turn, pick one of the 5 query sets (each containing 4 cards) and ask a bot how many of those 4 cards they hold.</li>
+      <li>Use the answers to eliminate possibilities and deduce the hidden card.</li>
+      <li>The first player who can identify the hidden card with certainty wins!</li>
+      <li>Both bots play optimally using information theory — choose your queries wisely.</li>
+    </ul>
+    <div style="margin-top:14px">
+      <div style="font-family:'Cinzel',serif;font-size:0.7rem;color:var(--gold);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px">The 5 Query Sets</div>
+      <div class="query-preview" id="welcome-queries"></div>
     </div>
-  </section>
+  </div>
+  <button class="btn btn-primary" onclick="startGame()" style="font-size:1rem; padding:14px 40px">
+    ◆ Begin the Game
+  </button>
+</div>
 
-  <section>
-    <h3>Card Distribution</h3>
-    <div class="controls">
-      <button id="setRandomBtn">Random Distribution</button>
-      <button id="setCustomBtn">Apply Custom</button>
-      <label for="p0_input">P0:</label><input id="p0_input" placeholder="1,2,3">
-      <label for="p1_input">P1:</label><input id="p1_input" placeholder="4,5,6">
-      <label for="p2_input">P2:</label><input id="p2_input" placeholder="7,8,9">
-      <label for="hidden_input">Hidden:</label><input id="hidden_input" placeholder="">
+<!-- GAME SCREEN -->
+<div id="game-screen" style="display:none">
+  <div class="layout">
+    <div>
+      <div class="status-bar" id="status-bar">
+        <div class="status-dot active" id="status-dot"></div>
+        <span class="status-text" id="status-text">Your turn — choose a query and a target</span>
+      </div>
+
+      <div id="win-banner" style="display:none" class="win-banner">
+        <div class="win-title" id="win-title"></div>
+        <div class="win-sub" id="win-sub"></div>
+        <div id="final-hands"></div>
+      </div>
+
+      <!-- Your hand -->
+      <div class="panel">
+        <h2>Your Hand <span class="badge badge-blue">Player 0</span></h2>
+        <div class="cards-row" id="your-hand"></div>
+      </div>
+
+      <!-- Query + Target -->
+      <div class="panel section-gap" id="query-panel">
+        <h2>Choose a Query Set</h2>
+        <div class="query-grid" id="query-grid"></div>
+
+        <div class="section-gap">
+          <h2>Ask Which Bot?</h2>
+          <div class="target-row">
+            <div class="target-btn" onclick="selectTarget(1)" id="target-1">Bot 1</div>
+            <div class="target-btn" onclick="selectTarget(2)" id="target-2">Bot 2</div>
+          </div>
+        </div>
+
+        <div class="section-gap flex-row">
+          <button class="btn btn-primary" id="ask-btn" onclick="submitAsk()" disabled>◆ Ask</button>
+          <span class="empty-msg" id="ask-hint">Select a query set and a target bot</span>
+        </div>
+      </div>
+
+      <!-- Knowledge -->
+      <div class="panel section-gap">
+        <h2>What You Know</h2>
+        <div class="knowledge-grid" id="knowledge-grid"></div>
+      </div>
+
+      <!-- Rewind -->
+      <div class="rewind-bar" id="rewind-bar">
+        <label>⏮ Rewind</label>
+        <input type="range" id="rewind-slider" min="0" max="0" value="0" oninput="rewindTo(this.value)"/>
+        <span class="rewind-step" id="rewind-step-label">Start</span>
+      </div>
     </div>
-    <p id="hand" class="muted"></p>
-  </section>
 
-  <section>
-    <h3>Ask (You are Player 0)</h3>
-    <div class="controls">
-      <label for="playerSelect">Ask Player:</label>
-      <select id="playerSelect"><option value="1">Player 1</option><option value="2">Player 2</option></select>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <!-- Belief distribution -->
+      <div class="panel">
+        <h2>Hidden Card Beliefs</h2>
+        <p style="font-size:0.82rem;color:var(--text-dim);margin-bottom:10px;font-style:italic">Probability each card is the hidden one (your view)</p>
+        <div id="belief-dist"></div>
+      </div>
 
-      <label for="querySelect">Query:</label>
-      <select id="querySelect"></select>
+      <!-- History -->
+      <div class="panel">
+        <h2>Query Log</h2>
+        <div class="history-list" id="history-list">
+          <span class="empty-msg">No queries yet.</span>
+        </div>
+      </div>
 
-      <button id="askBtn" disabled>Ask</button>
+      <!-- All beliefs -->
+      <div class="panel">
+        <h2>All Players' Beliefs</h2>
+        <div id="all-beliefs"></div>
+      </div>
     </div>
-
-    <div id="queryEvaluation" class="entropyBox"></div>
-    <div id="lastResult"></div>
-  </section>
-
-  <section>
-    <h3>Shannon Distribution (P0's POV)</h3>
-    <div id="probDist"></div>
-  </section>
-
-  <section>
-    <h3>Query Scores (top first)</h3>
-    <div id="queryScores"></div>
-  </section>
-
-  <section>
-    <h3>Recommendation</h3>
-    <div id="recommendation">No recommendation yet.</div>
-  </section>
-
-  <section>
-    <h3>Rewind / Time Travel</h3>
-    <div class="controls">
-      <label for="stepSelect">Jump to:</label>
-      <select id="stepSelect"></select>
-      <button id="goStepBtn" disabled>Go</button>
-      <button id="undoBtn" disabled>Undo</button>
-    </div>
-    <div id="stepMeta" class="muted small"></div>
-  </section>
-
-  <section>
-    <h3>P0 Belief & Confirmed</h3>
-    <div id="beliefP0" class="small"></div>
-    <div id="knownCards"></div>
-  </section>
-
-  <section>
-    <h3>Bot Thinking</h3>
-    <details><summary>Bot 1</summary><div><p><b>Possible hidden:</b> <span id="beliefBot1">-</span></p>
-      <p><b>Confirmed:</b></p>
-      <ul><li>P0: <span id="knownBot1_P0">-</span></li><li>P1: <span id="knownBot1_P1">-</span></li><li>P2: <span id="knownBot1_P2">-</span></li></ul></div></details>
-
-    <details><summary>Bot 2</summary><div><p><b>Possible hidden:</b> <span id="beliefBot2">-</span></p>
-      <p><b>Confirmed:</b></p>
-      <ul><li>P0: <span id="knownBot2_P0">-</span></li><li>P1: <span id="knownBot2_P1">-</span></li><li>P2: <span id="knownBot2_P2">-</span></li></ul></div></details>
-  </section>
-
-  <section>
-    <h3>History</h3>
-    <div id="historyLog"></div>
-  </section>
-
-</main>
+  </div>
+</div>
 
 <script>
-// ---------- GAME LOGIC PORTED FROM PYTHON ----------
-// Constants
-const CARDS = new Set(Array.from({length: 10}, (_, i) => i + 1));
-const PLAYERS = 3;
-const CARDS_PER_PLAYER = 3;
+// ===================== ORIGINAL GAME LOGIC (from game_logic.py) =====================
+
+// Exact query sets from the repo
 const QUERY_CARDS = [
-    new Set([1, 2, 3, 4]),
-    new Set([1, 5, 6, 7]),
-    new Set([2, 5, 8, 9]),
-    new Set([3, 6, 8, 10]),
-    new Set([4, 7, 9, 10]),
+  new Set([1,2,3,4]),
+  new Set([1,5,6,7]),
+  new Set([2,5,8,9]),
+  new Set([3,6,8,10]),
+  new Set([4,7,9,10]),
 ];
 
-// Utility functions
-function combinations(arr, r) {
-    const result = [];
-    function helper(start, combo) {
-        if (combo.length === r) {
-            result.push([...combo]);
-            return;
-        }
-        for (let i = start; i < arr.length; i++) {
-            combo.push(arr[i]);
-            helper(i + 1, combo);
-            combo.pop();
-        }
-    }
-    helper(0, []);
-    return result;
+const CARDS = new Set([1,2,3,4,5,6,7,8,9,10]);
+const CARDS_PER_PLAYER = 3;
+
+// Render welcome query preview
+function renderWelcomeQueries() {
+  const el = document.getElementById('welcome-queries');
+  el.innerHTML = QUERY_CARDS.map((q,i) => {
+    const arr = [...q].sort((a,b)=>a-b);
+    return `<div class="qp-set">Q${i+1}: {${arr.join(', ')}}</div>`;
+  }).join('');
+}
+renderWelcomeQueries();
+
+// --- Combinatorics ---
+function combinations(arr, k) {
+  if (k === 0) return [[]];
+  if (arr.length < k) return [];
+  const [first, ...rest] = arr;
+  return [
+    ...combinations(rest, k-1).map(c => [first, ...c]),
+    ...combinations(rest, k)
+  ];
 }
 
-function* fill(players, cards) {
-    if (!players.length) {
-        yield {};
-        return;
-    }
-    const p = players[0];
-    const need = CARDS_PER_PLAYER - (game_state.known_hands[p] ? game_state.known_hands[p].size : 0);
-    for (const combo of combinations([...cards], need)) {
+function intersectionSize(setA, setB) {
+  let count = 0;
+  for (const x of setA) if (setB.has(x)) count++;
+  return count;
+}
+
+// --- Possible worlds ---
+// known_hands: {0: Set, 1: Set, 2: Set} — only one player's full hand known
+// answers: array of [asker, target, qIdx, response]
+function possibleWorlds(knownHands, answers) {
+  const allCards = new Set(CARDS);
+  const knownAll = new Set();
+  for (let p = 0; p < 3; p++) for (const c of knownHands[p]) knownAll.add(c);
+
+  const unknownCards = [...allCards].filter(c => !knownAll.has(c));
+  const worlds = [];
+
+  // For each possible hidden card
+  for (const hidden of unknownCards) {
+    const remaining = unknownCards.filter(c => c !== hidden);
+    // Find players that still need cards
+    const unknownPlayers = [0,1,2].filter(p => knownHands[p].size < CARDS_PER_PLAYER);
+
+    // Distribute remaining cards among unknownPlayers
+    function fill(players, cards) {
+      if (players.length === 0) return [{}];
+      const [p, ...restP] = players;
+      const need = CARDS_PER_PLAYER - knownHands[p].size;
+      const results = [];
+      for (const combo of combinations(cards, need)) {
         const rest = cards.filter(c => !combo.includes(c));
-        for (const r of fill(players.slice(1), rest)) {
-            yield { [p]: new Set(combo), ...r };
+        for (const sub of fill(restP, rest)) {
+          results.push({[p]: new Set(combo), ...sub});
         }
+      }
+      return results;
     }
-}
 
-// Possible worlds generator
-function possible_worlds(known_hands, answers) {
-    const unknown_cards = new Set([...CARDS].filter(c => ![...known_hands.values()].some(s => s.has(c))));
-    const hidden_candidates = [...unknown_cards];
-    const possible = [];
-
-    for (const hidden of hidden_candidates) {
-        const remaining_cards = new Set([...unknown_cards].filter(c => c !== hidden));
-        const unknown_players = Array.from({length: PLAYERS}, (_, i) => i).filter(p => (known_hands[p] ? known_hands[p].size : 0) < CARDS_PER_PLAYER);
-        for (const assignment of fill(unknown_players, [...remaining_cards])) {
-            const hands = {};
-            for (let p = 0; p < PLAYERS; p++) {
-                hands[p] = new Set([...(known_hands[p] || new Set()), ...(assignment[p] || [])]);
-            }
-            let valid = true;
-            for (const [asker, target, q_idx, response] of answers) {
-                const q = QUERY_CARDS[q_idx];
-                const intersection = new Set([...hands[target]].filter(c => q.has(c)));
-                if (intersection.size !== response) {
-                    valid = false;
-                    break;
-                }
-            }
-            if (valid) {
-                possible.push([hidden, hands]);
-            }
+    for (const assignment of fill(unknownPlayers, remaining)) {
+      const hands = {};
+      for (let p = 0; p < 3; p++) {
+        hands[p] = new Set([...knownHands[p], ...(assignment[p] || [])]);
+      }
+      // Validate answers
+      let valid = true;
+      for (const [asker, target, qIdx, resp] of answers) {
+        if (intersectionSize(hands[target], QUERY_CARDS[qIdx]) !== resp) {
+          valid = false; break;
         }
+      }
+      if (valid) worlds.push({hidden, hands});
     }
-    return possible;
+  }
+  return worlds;
 }
 
-// Deal cards
-function deal_cards() {
-    const all_cards = [...CARDS];
-    for (let i = all_cards.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [all_cards[i], all_cards[j]] = [all_cards[j], all_cards[i]];
-    }
-    const hands = {};
-    for (let p = 0; p < PLAYERS; p++) {
-        hands[p] = new Set(all_cards.slice(p * CARDS_PER_PLAYER, (p + 1) * CARDS_PER_PLAYER));
-    }
-    const hidden = all_cards[PLAYERS * CARDS_PER_PLAYER];
-    return [hands, hidden];
+// --- Scoring: score_max_split (from repo) ---
+// score = sum over answer groups: |group| * (|total| - |group|)
+function scoreMaxSplit(worlds, qIdx, target) {
+  const groups = {};
+  for (const {hands} of worlds) {
+    const ans = intersectionSize(hands[target], QUERY_CARDS[qIdx]);
+    if (!groups[ans]) groups[ans] = new Set();
+    // count unique hidden cards per group
+    groups[ans].add(worlds.indexOf({hands})); // just count
+  }
+  // Recount properly
+  const counts = {};
+  for (const {hidden, hands} of worlds) {
+    const ans = intersectionSize(hands[target], QUERY_CARDS[qIdx]);
+    if (!counts[ans]) counts[ans] = [];
+    counts[ans].push(hidden);
+  }
+  const allHidden = new Set(worlds.map(w => w.hidden));
+  const total = allHidden.size;
+
+  // group by answer -> unique hidden
+  const groupSizes = {};
+  for (const [ans, hiddens] of Object.entries(counts)) {
+    groupSizes[ans] = new Set(hiddens).size;
+  }
+  let score = 0;
+  for (const g of Object.values(groupSizes)) {
+    score += g * (total - g);
+  }
+  return score;
 }
 
-// Scoring functions
-function score_max_split(worlds, query_index, asker, target) {
-    const answer_groups = new Map();
-    for (const [hidden, hands] of worlds) {
-        const ans = [...hands[target]].filter(c => QUERY_CARDS[query_index].has(c)).length;
-        if (!answer_groups.has(ans)) answer_groups.set(ans, new Set());
-        answer_groups.get(ans).add(hidden);
-    }
-    const total = new Set([...answer_groups.values()].flatMap(s => [...s]));
-    let score = 0;
-    for (const g of answer_groups.values()) {
-        score += g.size * (total.size - g.size);
-    }
-    return score;
+// --- Shannon entropy scoring ---
+function entropyFromCounts(counts) {
+  const total = Object.values(counts).reduce((a,b)=>a+b, 0);
+  if (total === 0) return 0;
+  let ent = 0;
+  for (const c of Object.values(counts)) {
+    const p = c / total;
+    if (p > 0) ent -= p * Math.log2(p);
+  }
+  return ent;
 }
 
-function entropy_from_counts(counts) {
-    const total = [...counts.values()].reduce((a, b) => a + b, 0);
-    if (total === 0) return 0.0;
-    let ent = 0.0;
-    for (const c of counts.values()) {
-        const p = c / total;
-        if (p > 0) ent -= p * Math.log2(p);
-    }
-    return ent;
+function scoreShannon(worlds, qIdx, target) {
+  const hiddenCounts = {};
+  for (const {hidden} of worlds) hiddenCounts[hidden] = (hiddenCounts[hidden]||0) + 1;
+  const priorEnt = entropyFromCounts(hiddenCounts);
+
+  const answerCounts = {};
+  const subHidden = {};
+  for (const {hidden, hands} of worlds) {
+    const ans = intersectionSize(hands[target], QUERY_CARDS[qIdx]);
+    answerCounts[ans] = (answerCounts[ans]||0) + 1;
+    if (!subHidden[ans]) subHidden[ans] = {};
+    subHidden[ans][hidden] = (subHidden[ans][hidden]||0) + 1;
+  }
+  const total = worlds.length;
+  let expectedEnt = 0;
+  for (const [ans, cnt] of Object.entries(answerCounts)) {
+    const pAns = cnt / total;
+    expectedEnt += pAns * entropyFromCounts(subHidden[ans]);
+  }
+  return priorEnt - expectedEnt; // information gain
 }
 
-function score_shannon(worlds, query_index, asker, target) {
-    const hidden_counts = new Map();
-    for (const [h, _] of worlds) {
-        hidden_counts.set(h, (hidden_counts.get(h) || 0) + 1);
+// --- Suggest best query ---
+function suggestQuery(knownHands, answers, asker, strategy) {
+  const worlds = possibleWorlds(knownHands, answers);
+  if (!worlds.length) return null;
+  let best = null, bestScore = -Infinity;
+  for (let target = 0; target < 3; target++) {
+    if (target === asker) continue;
+    for (let qIdx = 0; qIdx < QUERY_CARDS.length; qIdx++) {
+      const score = strategy === 'shannon'
+        ? scoreShannon(worlds, qIdx, target)
+        : scoreMaxSplit(worlds, qIdx, target);
+      if (score > bestScore) { bestScore = score; best = {target, qIdx, score}; }
     }
-    const prior_ent = entropy_from_counts(hidden_counts);
-
-    const answer_counts = new Map();
-    const subsets_hidden_counts = new Map();
-    for (const [h, hands] of worlds) {
-        const ans = [...hands[target]].filter(c => QUERY_CARDS[query_index].has(c)).length;
-        answer_counts.set(ans, (answer_counts.get(ans) || 0) + 1);
-        if (!subsets_hidden_counts.has(ans)) subsets_hidden_counts.set(ans, new Map());
-        subsets_hidden_counts.get(ans).set(h, (subsets_hidden_counts.get(ans).get(h) || 0) + 1);
-    }
-
-    const total = [...answer_counts.values()].reduce((a, b) => a + b, 0);
-    let expected_entropy = 0.0;
-    for (const [ans, cnt] of answer_counts) {
-        const p_ans = cnt / total;
-        const sub_counts = subsets_hidden_counts.get(ans);
-        const ent_sub = entropy_from_counts(sub_counts);
-        expected_entropy += p_ans * ent_sub;
-    }
-
-    const info_gain = prior_ent - expected_entropy;
-    return [info_gain, expected_entropy];
+  }
+  return best;
 }
 
-// Hidden distribution
-function hidden_distribution_for_player(known_hands, answers) {
-    const worlds = possible_worlds(known_hands, answers);
-    if (!worlds.length) return {};
-    const counts = new Map();
-    for (const [h, _] of worlds) {
-        counts.set(h, (counts.get(h) || 0) + 1);
+// --- Evaluate all queries (for UI display) ---
+function evaluateQueries(knownHands, answers, asker, strategy) {
+  const worlds = possibleWorlds(knownHands, answers);
+  if (!worlds.length) return [];
+  const results = [];
+  for (let target = 0; target < 3; target++) {
+    if (target === asker) continue;
+    for (let qIdx = 0; qIdx < QUERY_CARDS.length; qIdx++) {
+      const score = strategy === 'shannon'
+        ? scoreShannon(worlds, qIdx, target)
+        : scoreMaxSplit(worlds, qIdx, target);
+      results.push({target, qIdx, score});
     }
-    const total = [...counts.values()].reduce((a, b) => a + b, 0);
-    const dist = {};
-    for (const [h, c] of counts) {
-        dist[h] = c / total;
-    }
-    return dist;
+  }
+  results.sort((a,b) => b.score - a.score);
+  return results;
 }
 
-// Evaluate queries
-function evaluate_queries(known_hands, answers, asker, strategy = "score") {
-    const worlds = possible_worlds(known_hands, answers);
-    const results = [];
-    if (!worlds.length) return results;
-
-    const prior_counts = new Map();
-    for (const [h, _] of worlds) {
-        prior_counts.set(h, (prior_counts.get(h) || 0) + 1);
-    }
-    const prior_ent = entropy_from_counts(prior_counts);
-
-    for (let target = 0; target < PLAYERS; target++) {
-        if (target === asker) continue;
-        for (let q_idx = 0; q_idx < QUERY_CARDS.length; q_idx++) {
-            let score, ig, expected_ent;
-            if (strategy === "shannon") {
-                [ig, expected_ent] = score_shannon(worlds, q_idx, asker, target);
-                score = ig;
-            } else {
-                score = score_max_split(worlds, q_idx, asker, target);
-                ig = null;
-                expected_ent = null;
-            }
-            results.push({
-                target,
-                q_index: q_idx,
-                set: [...QUERY_CARDS[q_idx]].sort((a, b) => a - b),
-                score,
-                ig,
-                expected_entropy: expected_ent,
-                prior_entropy: prior_ent
-            });
-        }
-    }
-    results.sort((a, b) => (b.score || 0) - (a.score || 0));
-    return results;
+// --- Hidden distribution ---
+function hiddenDistribution(knownHands, answers) {
+  const worlds = possibleWorlds(knownHands, answers);
+  if (!worlds.length) return {};
+  const counts = {};
+  for (const {hidden} of worlds) counts[hidden] = (counts[hidden]||0) + 1;
+  const total = worlds.length;
+  const dist = {};
+  for (const [h, c] of Object.entries(counts)) dist[h] = c / total;
+  return dist;
 }
 
-// Suggest query
-function suggest_query(known_hands, answers, asker, strategy = "score") {
-    const worlds = possible_worlds(known_hands, answers);
-    if (!worlds.length) return [null, null];
-
-    let best = null;
-    let best_score = -1e9;
-
-    for (let target = 0; target < PLAYERS; target++) {
-        if (target === asker) continue;
-        for (let q_idx = 0; q_idx < QUERY_CARDS.length; q_idx++) {
-            let score;
-            if (strategy === "shannon") {
-                [score] = score_shannon(worlds, q_idx, asker, target);
-            } else {
-                score = score_max_split(worlds, q_idx, asker, target);
-            }
-            if (score > best_score) {
-                best_score = score;
-                best = [target, q_idx];
-            }
-        }
-    }
-    return [best, best_score];
+// --- Check winner ---
+function checkWinner(answers) {
+  for (let p = 0; p < 3; p++) {
+    const kh = {0: new Set(), 1: new Set(), 2: new Set()};
+    kh[p] = new Set(gameState.hands[p]);
+    const worlds = possibleWorlds(kh, answers);
+    const possibleHidden = [...new Set(worlds.map(w => w.hidden))];
+    if (possibleHidden.length === 1) return {winner: p, card: possibleHidden[0]};
+  }
+  return null;
 }
 
-// ---------- GLOBAL GAME STATE ----------
-let game_state = {
-    hands: null,
-    hidden: null,
-    answers: [],
-    known_hands: null,
-    history: [],
-    game_over: false,
-    snapshots: [],
-    step_index: 0,
-    strategy: "score"
+// --- Beliefs for player ---
+function beliefsForPlayer(playerIdx, answers) {
+  const kh = {0: new Set(), 1: new Set(), 2: new Set()};
+  kh[playerIdx] = new Set(gameState.hands[playerIdx]);
+  const worlds = possibleWorlds(kh, answers);
+  return [...new Set(worlds.map(w => w.hidden))].sort((a,b)=>a-b);
+}
+
+// ===================== GAME STATE =====================
+
+let gameState = {
+  hands: null,
+  hidden: null,
+  answers: [],
+  history: [],
+  gameOver: false,
+  snapshots: [],
+  stepIndex: 0,
+  strategy: 'score',
+  selectedQuery: null,
+  selectedTarget: null,
 };
 
-// ---------- HELPERS ----------
-function _record_history(asker, target, q_index, response) {
-    const q_set = [...QUERY_CARDS[q_index]].sort((a, b) => a - b);
-    const entry = { who: `P${asker}`, asked: `Player ${target} about {${q_set.join(", ")}}`, got: response };
-    game_state.history.push(entry);
-    return entry;
-}
-
-function snapshot_label() {
-    const labels = ["Start"];
-    for (let i = 1; i <= game_state.history.length; i++) {
-        labels.push(`Step ${i}`);
-    }
-    return labels;
-}
-
-function take_snapshot() {
-    const snap = {
-        hands: game_state.hands ? Object.fromEntries(Object.entries(game_state.hands).map(([p, s]) => [p, [...s].sort((a, b) => a - b)])) : null,
-        hidden: game_state.hidden,
-        answers: [...game_state.answers],
-        known_hands: game_state.known_hands ? Object.fromEntries(Object.entries(game_state.known_hands).map(([p, s]) => [p, [...s].sort((a, b) => a - b)])) : null,
-        history: [...game_state.history],
-        game_over: game_state.game_over
-    };
-    if (game_state.step_index < game_state.snapshots.length - 1) {
-        game_state.snapshots = game_state.snapshots.slice(0, game_state.step_index + 1);
-    }
-    game_state.snapshots.push(snap);
-    game_state.step_index = game_state.snapshots.length - 1;
-}
-
-function restore_snapshot(idx) {
-    if (idx < 0 || idx >= game_state.snapshots.length) return false;
-    const snap = game_state.snapshots[idx];
-    game_state.hands = snap.hands ? Object.fromEntries(Object.entries(snap.hands).map(([p, arr]) => [p, new Set(arr)])) : null;
-    game_state.hidden = snap.hidden;
-    game_state.answers = [...snap.answers];
-    game_state.known_hands = snap.known_hands ? Object.fromEntries(Object.entries(snap.known_hands).map(([p, arr]) => [p, new Set(arr)])) : null;
-    game_state.history = [...snap.history];
-    game_state.game_over = snap.game_over;
-    game_state.step_index = idx;
-    return true;
-}
-
-function _check_winner() {
-    for (let p = 0; p < PLAYERS; p++) {
-        const kh = {0: new Set(), 1: new Set(), 2: new Set()};
-        kh[p] = new Set(game_state.known_hands[p]);
-        const worlds = possible_worlds(kh, game_state.answers);
-        const possible_hidden = [...new Set(worlds.map(([h, _]) => h))].sort((a, b) => a - b);
-        if (possible_hidden.length === 1) {
-            return [true, p, possible_hidden[0]];
-        }
-    }
-    return [false, null, null];
-}
-
-function beliefs_for_player(player_idx) {
-    const kh = {0: new Set(), 1: new Set(), 2: new Set()};
-    kh[player_idx] = new Set(game_state.known_hands[player_idx]);
-    const worlds = possible_worlds(kh, game_state.answers);
-    return [...new Set(worlds.map(([h, _]) => h))].sort((a, b) => a - b);
-}
-
-function get_certain_cards_player0_view() {
-    const kh = {0: new Set(), 1: new Set(), 2: new Set()};
-    kh[0] = new Set(game_state.known_hands[0]);
-    const worlds = possible_worlds(kh, game_state.answers);
-    const certain = {0: [], 1: [], 2: []};
-    for (let pl = 0; pl < PLAYERS; pl++) {
-        certain[pl] = [...new Set(worlds.flatMap(([_, hands]) => [...hands[pl]]).filter(card => worlds.every(([_, hands]) => hands[pl].has(card))))].sort((a, b) => a - b);
-    }
-    return certain;
-}
-
-function get_player_knowledge_all() {
-    const pk = {};
-    for (let p = 0; p < PLAYERS; p++) {
-        const kh = {0: new Set(), 1: new Set(), 2: new Set()};
-        kh[p] = new Set(game_state.known_hands[p]);
-        const worlds = possible_worlds(kh, game_state.answers);
-        const beliefs = [...new Set(worlds.map(([h, _]) => h))].sort((a, b) => a - b);
-        const certain = {};
-        for (let pl = 0; pl < PLAYERS; pl++) {
-            certain[pl] = [...new Set(worlds.flatMap(([_, hands]) => [...hands[pl]]).filter(card => worlds.every(([_, hands]) => hands[pl].has(card))))].sort((a, b) => a - b);
-        }
-        pk[p] = { beliefs, certain };
-    }
-    return pk;
-}
-
-function build_response_payload(bots_list, extra = null) {
-    const payload = {
-        you: null,
-        bots: bots_list,
-        history: [...game_state.history],
-        beliefs: { 0: beliefs_for_player(0) },
-        certain_cards: get_certain_cards_player0_view(),
-        player_knowledge: get_player_knowledge_all(),
-        step_index: game_state.step_index,
-        total_steps: game_state.snapshots.length,
-        step_labels: snapshot_label(),
-        game_over: game_state.game_over,
-        winner: null,
-        hidden_card: null,
-        final_hands: null,
-        strategy: game_state.strategy
-    };
-
-    if (game_state.history.length) {
-        let last_you = null;
-        for (const h of game_state.history.slice().reverse()) {
-            if (h.who === "P0") {
-                last_you = h;
-                break;
-            }
-        }
-        payload.you = last_you ? { asked: last_you.asked, response: last_you.got } : null;
-    }
-
-    if (game_state.game_over) {
-        const [over, who, card] = _check_winner();
-        payload.winner = who;
-        payload.hidden_card = card;
-        payload.final_hands = game_state.hands ? Object.fromEntries(Object.entries(game_state.hands).map(([p, s]) => [p, [...s].sort((a, b) => a - b)])) : null;
-    }
-
-    if (extra) {
-        Object.assign(payload, extra);
-    }
-    return payload;
-}
-
-// ---------- FUNCTIONS SIMULATING ROUTES ----------
-function set_strategy(strategy) {
-    if (!["score", "shannon", "info"].includes(strategy)) return { error: "Invalid strategy" };
-    if (strategy === "info") game_state.strategy = "score";
-    else game_state.strategy = strategy;
-    return { strategy: game_state.strategy };
-}
-
-function start(mode = "random", custom_hands = null, hidden = null) {
-    let hands, hid;
-    if (mode === "random") {
-        [hands, hid] = deal_cards();
-    } else {
-        // custom
-        const seen = new Set();
-        hands = {};
-        for (let p = 0; p < PLAYERS; p++) {
-            const arr = custom_hands[p].map(Number);
-            hands[p] = new Set(arr);
-            for (const c of arr) {
-                if (seen.has(c)) throw new Error(`Duplicate card ${c}`);
-                seen.add(c);
-            }
-        }
-        if (hidden === null) {
-            const all_cards = new Set([...CARDS]);
-            const leftover = [...all_cards].filter(c => !seen.has(c));
-            if (leftover.length !== 1) throw new Error("Cannot deduce hidden card");
-            hid = leftover[0];
-        } else {
-            hid = Number(hidden);
-            if (seen.has(hid)) throw new Error("Hidden card appears in hands");
-        }
-    }
-
-    game_state.hands = Object.fromEntries(Object.entries(hands).map(([p, s]) => [p, new Set(s)]));
-    game_state.hidden = hid;
-    game_state.answers = [];
-    game_state.known_hands = Object.fromEntries(Object.entries(hands).map(([p, s]) => [p, new Set(s)]));
-    game_state.history = [];
-    game_state.game_over = false;
-    game_state.snapshots = [];
-    game_state.step_index = 0;
-    take_snapshot();
-
-    const extra = {
-        shannon_dist: hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers),
-        query_scores: [],
-        recommendation: null
-    };
-
-    return {
-        your_hand: [...game_state.hands[0]].sort((a, b) => a - b),
-        query_cards: QUERY_CARDS.map(q => [...q].sort((a, b) => a - b)),
-        step_index: game_state.step_index,
-        total_steps: game_state.snapshots.length,
-        step_labels: snapshot_label(),
-        history: game_state.history,
-        beliefs: { 0: beliefs_for_player(0) },
-        certain_cards: { 0: [], 1: [], 2: [] },
-        player_knowledge: get_player_knowledge_all(),
-        game_over: false,
-        final_hands: null,
-        shannon_dist: extra.shannon_dist,
-        query_scores: extra.query_scores,
-        recommendation: extra.recommendation,
-        strategy: game_state.strategy
-    };
-}
-
-function ask(asker, target, query, strategy) {
-    if (game_state.game_over) throw new Error("Game already over");
-
-    const q_set = QUERY_CARDS[query];
-    const response = [...game_state.hands[target]].filter(c => q_set.has(c)).length;
-    game_state.answers.push([asker, target, query, response]);
-    _record_history(asker, target, query, response);
-    take_snapshot();
-
-    let [over, who, card] = _check_winner();
-    if (over) {
-        game_state.game_over = true;
-        const payload = build_response_payload([], {
-            shannon_dist: hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers),
-            query_scores: evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy),
-            recommendation: evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy)[0] || null
-        });
-        return payload;
-    }
-
-    // Bot 1
-    const [bot1_choice] = suggest_query({0: new Set(), 1: new Set(game_state.known_hands[1]), 2: new Set()}, game_state.answers, 1, strategy);
-    let bot1 = null;
-    if (bot1_choice) {
-        const [t1, q1] = bot1_choice;
-        const resp1 = [...game_state.hands[t1]].filter(c => QUERY_CARDS[q1].has(c)).length;
-        game_state.answers.push([1, t1, q1, resp1]);
-        _record_history(1, t1, q1, resp1);
-        take_snapshot();
-        bot1 = { bot: 1, asked: `Player ${t1} about {${[...QUERY_CARDS[q1]].sort((a, b) => a - b).join(", ")}}`, response: resp1 };
-    }
-
-    [over, who, card] = _check_winner();
-    if (over) {
-        game_state.game_over = true;
-        const payload = build_response_payload([bot1].filter(b => b), {
-            shannon_dist: hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers),
-            query_scores: evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy),
-            recommendation: evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy)[0] || null
-        });
-        return payload;
-    }
-
-    // Bot 2
-    const [bot2_choice] = suggest_query({0: new Set(), 1: new Set(), 2: new Set(game_state.known_hands[2])}, game_state.answers, 2, strategy);
-    let bot2 = null;
-    if (bot2_choice) {
-        const [t2, q2] = bot2_choice;
-        const resp2 = [...game_state.hands[t2]].filter(c => QUERY_CARDS[q2].has(c)).length;
-        game_state.answers.push([2, t2, q2, resp2]);
-        _record_history(2, t2, q2, resp2);
-        take_snapshot();
-        bot2 = { bot: 2, asked: `Player ${t2} about {${[...QUERY_CARDS[q2]].sort((a, b) => a - b).join(", ")}}`, response: resp2 };
-    }
-
-    [over, who, card] = _check_winner();
-    if (over) {
-        game_state.game_over = true;
-    }
-
-    const shannon_dist = hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers);
-    const query_scores = evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy);
-    const recommendation = query_scores[0] || null;
-
-    return build_response_payload([bot1, bot2].filter(b => b), {
-        shannon_dist,
-        query_scores,
-        recommendation
-    });
-}
-
-function rewind(step) {
-    const ok = restore_snapshot(step);
-    if (!ok) throw new Error("Invalid step index");
-
-    const shannon_dist = hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers);
-    const query_scores = evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, game_state.strategy);
-    const recommendation = query_scores[0] || null;
-
-    return {
-        history: game_state.history,
-        beliefs: { 0: beliefs_for_player(0) },
-        certain_cards: get_certain_cards_player0_view(),
-        player_knowledge: get_player_knowledge_all(),
-        step_index: game_state.step_index,
-        total_steps: game_state.snapshots.length,
-        step_labels: snapshot_label(),
-        game_over: game_state.game_over,
-        winner: null,
-        hidden_card: game_state.hidden,
-        final_hands: game_state.game_over ? Object.fromEntries(Object.entries(game_state.hands).map(([p, s]) => [p, [...s].sort((a, b) => a - b)])) : null,
-        shannon_dist,
-        query_scores,
-        recommendation,
-        strategy: game_state.strategy
-    };
-}
-
-// ---------- UI FUNCTIONS ----------
-let QUERY_CARDS_UI = [];
-let currentStrategy = "info";
-
-function renderQueryOptions(list) {
-  const sel = document.getElementById("querySelect");
-  sel.innerHTML = "";
-  list.forEach((q, i) => sel.innerHTML += `<option value="${i}">{${q.join(", ")}}</option>`);
-}
-
-function renderProbabilityDist(dist) {
-  const box = document.getElementById("probDist");
-  box.innerHTML = "";
-  if (!dist) {
-    box.innerHTML = "<i>No distribution</i>";
-    return;
+function shuffle(arr) {
+  for (let i = arr.length-1; i>0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [arr[i],arr[j]] = [arr[j],arr[i]];
   }
-  Object.entries(dist).sort(([a], [b]) => a - b).forEach(([card, p]) => {
-    box.innerHTML += `<div><b>${card}:</b> ${(p * 100).toFixed(1)}% <div class="distributionBar" style="width:${Math.max(2, p * 100)}%"></div></div>`;
+  return arr;
+}
+
+function dealCards() {
+  const cards = shuffle([1,2,3,4,5,6,7,8,9,10]);
+  return {
+    hands: {0: new Set(cards.slice(0,3)), 1: new Set(cards.slice(3,6)), 2: new Set(cards.slice(6,9))},
+    hidden: cards[9]
+  };
+}
+
+function takeSnapshot() {
+  const snap = {
+    hands: {0:[...gameState.hands[0]], 1:[...gameState.hands[1]], 2:[...gameState.hands[2]]},
+    hidden: gameState.hidden,
+    answers: gameState.answers.map(a=>[...a]),
+    history: gameState.history.map(h=>({...h})),
+    gameOver: gameState.gameOver,
+  };
+  if (gameState.stepIndex < gameState.snapshots.length - 1)
+    gameState.snapshots = gameState.snapshots.slice(0, gameState.stepIndex+1);
+  gameState.snapshots.push(snap);
+  gameState.stepIndex = gameState.snapshots.length - 1;
+}
+
+function restoreSnapshot(idx) {
+  const snap = gameState.snapshots[idx];
+  if (!snap) return false;
+  gameState.hands = {0: new Set(snap.hands[0]), 1: new Set(snap.hands[1]), 2: new Set(snap.hands[2])};
+  gameState.hidden = snap.hidden;
+  gameState.answers = snap.answers.map(a=>[...a]);
+  gameState.history = snap.history.map(h=>({...h}));
+  gameState.gameOver = snap.gameOver;
+  gameState.stepIndex = idx;
+  return true;
+}
+
+// ===================== UI ACTIONS =====================
+
+function startGame() {
+  const {hands, hidden} = dealCards();
+  gameState.hands = hands;
+  gameState.hidden = hidden;
+  gameState.answers = [];
+  gameState.history = [];
+  gameState.gameOver = false;
+  gameState.snapshots = [];
+  gameState.stepIndex = 0;
+  gameState.selectedQuery = null;
+  gameState.selectedTarget = null;
+  takeSnapshot();
+
+  document.getElementById('welcome-screen').style.display = 'none';
+  document.getElementById('game-screen').style.display = 'block';
+  document.getElementById('new-game-btn').style.display = '';
+  document.getElementById('win-banner').style.display = 'none';
+  document.getElementById('query-panel').style.opacity = '';
+  document.getElementById('query-panel').style.pointerEvents = '';
+
+  renderAll();
+}
+
+function newGame() {
+  document.getElementById('game-screen').style.display = 'none';
+  document.getElementById('welcome-screen').style.display = 'flex';
+  document.getElementById('new-game-btn').style.display = 'none';
+}
+
+function setStrategy(val) {
+  gameState.strategy = val;
+  renderQueryGrid();
+}
+
+function selectQuery(idx) {
+  if (gameState.gameOver) return;
+  gameState.selectedQuery = idx;
+  renderQueryGrid();
+  updateAskButton();
+}
+
+function selectTarget(t) {
+  if (gameState.gameOver) return;
+  gameState.selectedTarget = t;
+  document.getElementById('target-1').classList.toggle('selected', t===1);
+  document.getElementById('target-2').classList.toggle('selected', t===2);
+  updateAskButton();
+}
+
+function updateAskButton() {
+  const btn = document.getElementById('ask-btn');
+  const hint = document.getElementById('ask-hint');
+  const ready = gameState.selectedQuery !== null && gameState.selectedTarget !== null;
+  btn.disabled = !ready || gameState.gameOver;
+  if (ready) hint.textContent = '';
+  else if (gameState.selectedQuery === null) hint.textContent = 'Select a query set';
+  else hint.textContent = 'Select a target bot';
+}
+
+function submitAsk() {
+  if (gameState.gameOver) return;
+  const asker = 0, target = gameState.selectedTarget, qIdx = gameState.selectedQuery;
+
+  // Player 0 move
+  const resp = intersectionSize(gameState.hands[target], QUERY_CARDS[qIdx]);
+  gameState.answers.push([asker, target, qIdx, resp]);
+  const qArr = [...QUERY_CARDS[qIdx]].sort((a,b)=>a-b);
+  gameState.history.push({who:'P0', type:'you', text:`Asked Bot ${target} about {${qArr.join(', ')}}`, result:`${resp} card${resp!==1?'s':''}`});
+  takeSnapshot();
+
+  let win = checkWinner(gameState.answers);
+  if (win) { gameState.gameOver = true; renderAll(); showWin(win); return; }
+
+  // Bot 1 — uses its own hand (knownHands[1] = bot1's hand, others empty)
+  const kh1 = {0: new Set(), 1: new Set(gameState.hands[1]), 2: new Set()};
+  const b1 = suggestQuery(kh1, gameState.answers, 1, gameState.strategy);
+  if (b1) {
+    const r1 = intersectionSize(gameState.hands[b1.target], QUERY_CARDS[b1.qIdx]);
+    gameState.answers.push([1, b1.target, b1.qIdx, r1]);
+    const qa1 = [...QUERY_CARDS[b1.qIdx]].sort((a,b)=>a-b);
+    gameState.history.push({who:'Bot 1', type:'bot1', text:`Asked Player ${b1.target} about {${qa1.join(', ')}}`, result:`${r1} card${r1!==1?'s':''}`});
+    takeSnapshot();
+    win = checkWinner(gameState.answers);
+    if (win) { gameState.gameOver = true; renderAll(); showWin(win); return; }
+  }
+
+  // Bot 2 — uses its own hand
+  const kh2 = {0: new Set(), 1: new Set(), 2: new Set(gameState.hands[2])};
+  const b2 = suggestQuery(kh2, gameState.answers, 2, gameState.strategy);
+  if (b2) {
+    const r2 = intersectionSize(gameState.hands[b2.target], QUERY_CARDS[b2.qIdx]);
+    gameState.answers.push([2, b2.target, b2.qIdx, r2]);
+    const qa2 = [...QUERY_CARDS[b2.qIdx]].sort((a,b)=>a-b);
+    gameState.history.push({who:'Bot 2', type:'bot2', text:`Asked Player ${b2.target} about {${qa2.join(', ')}}`, result:`${r2} card${r2!==1?'s':''}`});
+    takeSnapshot();
+    win = checkWinner(gameState.answers);
+    if (win) { gameState.gameOver = true; renderAll(); showWin(win); return; }
+  }
+
+  gameState.selectedQuery = null;
+  gameState.selectedTarget = null;
+  renderAll();
+}
+
+function rewindTo(val) {
+  val = parseInt(val);
+  restoreSnapshot(val);
+  gameState.selectedQuery = null;
+  gameState.selectedTarget = null;
+  document.getElementById('rewind-step-label').textContent = val === 0 ? 'Start' : `Step ${val}`;
+  renderAll(true);
+}
+
+function showWin(win) {
+  const banner = document.getElementById('win-banner');
+  banner.style.display = 'block';
+  const title = document.getElementById('win-title');
+  const sub = document.getElementById('win-sub');
+
+  if (win.winner === 0) {
+    title.textContent = '✦ You Win! ✦';
+    title.style.color = 'var(--gold-light)';
+    sub.textContent = `You correctly deduced the hidden card: ${win.card}`;
+  } else {
+    title.textContent = `Bot ${win.winner} Wins`;
+    title.style.color = 'var(--text-dim)';
+    sub.textContent = `Bot ${win.winner} deduced the hidden card: ${win.card}`;
+  }
+
+  document.getElementById('final-hands').innerHTML = `
+    <div style="margin-top:12px">
+      <div style="font-family:'Cinzel',serif;font-size:0.75rem;color:var(--text-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.1em">Final Distribution</div>
+      <div style="display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
+        ${[0,1,2].map(p=>`
+          <div style="text-align:center">
+            <div style="font-family:'Cinzel',serif;font-size:0.7rem;color:${p===0?'var(--blue)':'var(--text-dim)'};margin-bottom:6px">${p===0?'You':'Bot '+p}</div>
+            <div style="display:flex;gap:4px;justify-content:center">
+              ${[...gameState.hands[p]].sort((a,b)=>a-b).map(c=>`<div class="card card-player" style="width:36px;height:50px;font-size:0.9rem">${c}</div>`).join('')}
+            </div>
+          </div>
+        `).join('')}
+        <div style="text-align:center">
+          <div style="font-family:'Cinzel',serif;font-size:0.7rem;color:var(--purple);margin-bottom:6px">Hidden</div>
+          <div class="card card-hidden" style="width:36px;height:50px;font-size:0.9rem;margin:0 auto">${gameState.hidden}</div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('query-panel').style.opacity = '0.4';
+  document.getElementById('query-panel').style.pointerEvents = 'none';
+  document.getElementById('status-dot').className = 'status-dot win';
+  document.getElementById('status-text').textContent = win.winner === 0 ? '🏆 You identified the hidden card!' : `Bot ${win.winner} solved it first.`;
+}
+
+// ===================== RENDER =====================
+
+function renderAll(rewinding=false) {
+  renderHand();
+  renderQueryGrid();
+  renderTargets();
+  renderHistory();
+  renderBeliefDist();
+  renderKnowledge();
+  renderAllBeliefs();
+  renderRewindBar();
+  if (!rewinding) updateAskButton();
+}
+
+function renderHand() {
+  document.getElementById('your-hand').innerHTML =
+    [...gameState.hands[0]].sort((a,b)=>a-b).map(c =>
+      `<div class="card card-player">${c}</div>`
+    ).join('');
+}
+
+function renderQueryGrid() {
+  const grid = document.getElementById('query-grid');
+  // Evaluate from player 0's POV
+  const kh0 = {0: new Set(gameState.hands[0]), 1: new Set(), 2: new Set()};
+  const scores = evaluateQueries(kh0, gameState.answers, 0, gameState.strategy);
+
+  // Best score to mark recommendation
+  // Group by qIdx, pick best target for each
+  const qBest = {}; // qIdx -> {target, score}
+  for (const s of scores) {
+    if (!(s.qIdx in qBest) || s.score > qBest[s.qIdx].score) {
+      qBest[s.qIdx] = s;
+    }
+  }
+  const maxScore = scores.length ? scores[0].score : null;
+
+  grid.innerHTML = QUERY_CARDS.map((qset, i) => {
+    const cards = [...qset].sort((a,b)=>a-b);
+    const best = qBest[i];
+    const score = best ? best.score : null;
+    const isRec = maxScore !== null && score === maxScore && !gameState.gameOver;
+    const isSel = gameState.selectedQuery === i;
+    const recTgt = best ? `Bot ${best.target}` : '';
+
+    return `<div class="query-row${isSel?' selected':''}${isRec?' recommended':''}" onclick="selectQuery(${i})">
+      <span class="query-label">Query ${i+1}</span>
+      <div class="query-cards-row">
+        ${cards.map(c=>`<div class="qcard">${c}</div>`).join('')}
+      </div>
+      ${isRec ? `<span class="rec-badge">★ Best · ask ${recTgt}</span>` : score !== null ? `<span class="query-score">${typeof score==='number'&&!Number.isInteger(score)?score.toFixed(2):score}</span>` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderTargets() {
+  [1,2].forEach(t => {
+    const el = document.getElementById(`target-${t}`);
+    if (el) el.classList.toggle('selected', gameState.selectedTarget === t);
   });
 }
 
-function renderQueryScores(scores) {
-  const box = document.getElementById("queryScores");
-  box.innerHTML = "";
-  if (!scores || scores.length === 0) {
-    box.innerHTML = "<i>No scores computed</i>";
+function renderHistory() {
+  const list = document.getElementById('history-list');
+  if (!gameState.history.length) {
+    list.innerHTML = '<span class="empty-msg">No queries yet.</span>';
     return;
   }
-  const rows = scores.map(s => `<tr><td>P${s.target}</td><td>{${s.set.join(", ")}}</td><td>${(s.score || 0).toFixed(3)}</td><td>${s.ig !== null ? (s.ig || 0).toFixed(3) : "-"}</td><td>${s.expected_entropy !== null ? s.expected_entropy.toFixed(3) : "-"}</td></tr>`).join("");
-  box.innerHTML = `<table><thead><tr><th>Target</th><th>Query</th><th>Score</th><th>IG</th><th>Exp H</th></tr></thead><tbody>${rows}</tbody></table>`;
+  list.innerHTML = [...gameState.history].reverse().map(h => `
+    <div class="history-item ${h.type} fade-in">
+      <div class="history-who">${h.who}</div>
+      <div class="history-detail">${h.text} → <span>${h.result}</span></div>
+    </div>
+  `).join('');
 }
 
-function renderRecommendation(rec) {
-  const div = document.getElementById("recommendation");
-  if (!rec) {
-    div.innerHTML = "<i>No recommendation</i>";
-    return;
-  }
-  div.innerHTML = `<b>Ask Player ${rec.target}</b> about {${rec.set.join(", ")}} — score=${(rec.score || 0).toFixed(3)} ${rec.ig !== null ? "IG=" + rec.ig.toFixed(3) : ""}`;
+function renderBeliefDist() {
+  const kh0 = {0: new Set(gameState.hands[0]), 1: new Set(), 2: new Set()};
+  const dist = hiddenDistribution(kh0, gameState.answers);
+  const el = document.getElementById('belief-dist');
+  const maxP = Math.max(...Object.values(dist), 0.001);
+
+  el.innerHTML = [1,2,3,4,5,6,7,8,9,10].map(c => {
+    const p = dist[c] || 0;
+    const pct = Math.round(p * 100);
+    const barW = Math.round((p / maxP) * 100);
+    const isCandidate = p > 0;
+    return `<div class="dist-row">
+      <span class="dist-label" style="color:${isCandidate?'var(--purple)':'var(--text-dim)'}">${c}</span>
+      <div class="dist-fill-bg">
+        <div class="dist-fill" style="width:${barW}%;background:${isCandidate?'var(--purple)':'var(--border)'}"></div>
+      </div>
+      <span class="dist-pct" style="color:${isCandidate?'var(--purple)':'var(--text-dim)'}">${isCandidate?pct+'%':''}</span>
+    </div>`;
+  }).join('');
 }
 
-function renderHistory(hist) {
-  const box = document.getElementById("historyLog");
-  box.innerHTML = "";
-  hist.forEach(h => box.innerHTML += `<p>${h.who} asked ${h.asked} → <b>${h.got}</b></p>`);
-}
+function renderKnowledge() {
+  const grid = document.getElementById('knowledge-grid');
+  const kh0 = {0: new Set(gameState.hands[0]), 1: new Set(), 2: new Set()};
+  const worlds = possibleWorlds(kh0, gameState.answers);
 
-function renderP0Belief(beliefs) {
-  document.getElementById("beliefP0").textContent = beliefs && beliefs[0] ? `[${beliefs[0].join(", ")}]` : "Unknown";
-}
-
-function renderKnown(certain) {
-  const div = document.getElementById("knownCards");
-  let html = "";
-  if (certain[0] && certain[0].length) html += `<p><b>You:</b> ${certain[0].join(", ")}</p>`;
-  if (certain[1] && certain[1].length) html += `<p><b>P1:</b> ${certain[1].join(", ")}</p>`;
-  if (certain[2] && certain[2].length) html += `<p><b>P2:</b> ${certain[2].join(", ")}</p>`;
-  div.innerHTML = html || "<i>No confirmed knowledge yet</i>";
-}
-
-function renderBotKnowledge(pk) {
-  if (!pk) return;
-  document.getElementById("beliefBot1").textContent = pk[1].beliefs.join(", ") || "-";
-  document.getElementById("beliefBot2").textContent = pk[2].beliefs.join(", ") || "-";
-  for (let p = 0; p < PLAYERS; p++) {
-    document.getElementById(`knownBot1_P${p}`).textContent = pk[1].certain[p].join(", ") || "-";
-    document.getElementById(`knownBot2_P${p}`).textContent = pk[2].certain[p].join(", ") || "-";
-  }
-}
-
-function renderStepMeta(idx, total, labels) {
-  document.getElementById("stepMeta").textContent = `Step ${idx} / ${total - 1}`;
-  const sel = document.getElementById("stepSelect");
-  sel.innerHTML = "";
-  (labels || []).forEach((lab, i) => {
-    const o = document.createElement("option");
-    o.value = i;
-    o.textContent = lab;
-    if (i === idx) o.selected = true;
-    sel.appendChild(o);
-  });
-  document.getElementById("goStepBtn").disabled = total <= 1;
-  document.getElementById("undoBtn").disabled = (Number(sel.value) === 0);
-}
-
-function applyPayloadCommon(data) {
-  renderHistory(data.history);
-  renderP0Belief(data.beliefs);
-  renderKnown(data.certain_cards);
-  renderBotKnowledge(data.player_knowledge);
-  renderStepMeta(data.step_index, data.total_steps, data.step_labels);
-  renderProbabilityDist(data.shannon_dist);
-  renderQueryScores(data.query_scores);
-  renderRecommendation(data.recommendation);
-  document.getElementById("askBtn").disabled = !!data.game_over;
-  if (data.game_over) {
-    document.getElementById("lastResult").innerHTML += `<br><h3>🎉 Game Over — Player ${data.winner} discovered the hidden card: ${data.hidden_card}</h3>`;
-  }
-}
-
-// ---------- EVENT HANDLERS ----------
-document.getElementById("applyStrategyBtn").onclick = () => {
-  try {
-    const s = document.getElementById("strategySelect").value;
-    currentStrategy = s;
-    document.getElementById("strategyDescription").textContent = s === "info" ? "Using Information gain heuristic" : "Using Shannon entropy scoring";
-    set_strategy(s);
-    // If game is in progress, update query scores and recommendation with new strategy
-    if (game_state.hands) {
-      const shannon_dist = hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers);
-      const query_scores = evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, s === "info" ? "score" : s);
-      const recommendation = query_scores[0] || null;
-      renderProbabilityDist(shannon_dist);
-      renderQueryScores(query_scores);
-      renderRecommendation(recommendation);
+  const certain = {0:[], 1:[], 2:[]};
+  for (let p = 0; p < 3; p++) {
+    for (let c = 1; c <= 10; c++) {
+      if (worlds.length && worlds.every(w => w.hands[p].has(c)))
+        certain[p].push(c);
     }
-  } catch (e) {
-    console.error("Error applying strategy:", e);
-    alert("Error applying strategy: " + e.message);
   }
-};
 
-document.getElementById("setRandomBtn").onclick = () => {
-  try {
-    const d = start("random");
-    document.getElementById("hand").textContent = "Your cards: " + d.your_hand.join(", ");
-    QUERY_CARDS_UI = d.query_cards;
-    renderQueryOptions(QUERY_CARDS_UI);
-    applyPayloadCommon(d);
-  } catch (e) {
-    alert("Error: " + e.message);
-  }
-};
+  grid.innerHTML = [0,1,2].map(p => `
+    <div class="knowledge-col ${p===0?'you-col':''}">
+      <h4>${p===0?'You':'Bot '+p}</h4>
+      <div class="knowledge-certain">
+        ${p===0
+          ? [...gameState.hands[0]].sort((a,b)=>a-b).map(c=>
+              `<div class="kc card-player" style="border:1px solid var(--blue);border-radius:4px">${c}</div>`).join('')
+          : certain[p].length
+            ? certain[p].map(c=>`<div class="kc card-known" style="border:1px solid var(--green);border-radius:4px">${c}</div>`).join('')
+            : '<span style="color:var(--text-dim);font-size:0.78rem;font-style:italic">Unknown</span>'
+        }
+      </div>
+      ${p!==0 && certain[p].length ? `<div style="font-size:0.72rem;color:var(--green);margin-top:4px">Certain (your view)</div>` : ''}
+    </div>
+  `).join('');
+}
 
-document.getElementById("setCustomBtn").onclick = () => {
-  try {
-    const p0 = document.getElementById("p0_input").value.split(",").map(x => x.trim()).filter(x => x !== "").map(Number);
-    const p1 = document.getElementById("p1_input").value.split(",").map(x => x.trim()).filter(x => x !== "").map(Number);
-    const p2 = document.getElementById("p2_input").value.split(",").map(x => x.trim()).filter(x => x !== "").map(Number);
-    const hidden = document.getElementById("hidden_input").value.trim() || null;
-    const d = start("custom", {0: p0, 1: p1, 2: p2}, hidden);
-    document.getElementById("hand").textContent = "Your cards: " + d.your_hand.join(", ");
-    QUERY_CARDS_UI = d.query_cards;
-    renderQueryOptions(QUERY_CARDS_UI);
-    applyPayloadCommon(d);
-  } catch (e) {
-    console.error("Error starting custom game:", e);
-    alert("Error starting custom game: " + e.message);
-  }
-};
+function renderAllBeliefs() {
+  const allBel = document.getElementById('all-beliefs');
+  allBel.innerHTML = [0,1,2].map(p => {
+    const b = beliefsForPlayer(p, gameState.answers);
+    const color = p===0?'var(--blue)':p===1?'var(--text-dim)':'var(--purple)';
+    return `
+      <div style="margin-bottom:12px">
+        <div style="font-family:'Cinzel',serif;font-size:0.7rem;color:${color};text-transform:uppercase;letter-spacing:0.08em;margin-bottom:6px">
+          ${p===0?'Your':'Bot '+p+"'s"} beliefs
+        </div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          ${[1,2,3,4,5,6,7,8,9,10].map(c=>`
+            <div style="width:28px;height:38px;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:0.72rem;font-family:'Cinzel',serif;
+              border:1px solid ${b.includes(c)?'var(--purple)':'var(--border)'};
+              color:${b.includes(c)?'var(--purple)':'var(--text-dim)'};
+              background:${b.includes(c)?'rgba(112,64,160,0.12)':'var(--surface2)'}">${c}</div>
+          `).join('')}
+        </div>
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-top:4px">${b.length} possibility${b.length!==1?'ies':''}</div>
+      </div>`;
+  }).join('');
+}
 
-document.getElementById("askBtn").onclick = () => {
-  const target = Number(document.getElementById("playerSelect").value);
-  const query = Number(document.getElementById("querySelect").value);
-  try {
-    const d = ask(0, target, query, currentStrategy);
-    let out = "";
-    if (d.you) out += `<b>You:</b> asked ${d.you.asked} → <b>${d.you.response}</b><br>`;
-    (d.bots || []).forEach(b => out += `<b>Bot ${b.bot}:</b> asked ${b.asked} → <b>${b.response}</b><br>`);
-    document.getElementById("lastResult").innerHTML = out;
-    applyPayloadCommon(d);
-  } catch (e) {
-    alert("Error: " + e.message);
-  }
-};
-
-document.getElementById("goStepBtn").onclick = () => {
-  const idx = Number(document.getElementById("stepSelect").value);
-  try {
-    const d = rewind(idx);
-    document.getElementById("lastResult").innerHTML = "<i>Rewound</i>";
-    applyPayloadCommon(d);
-  } catch (e) {
-    alert("Error: " + e.message);
-  }
-};
-
-document.getElementById("undoBtn").onclick = () => {
-  const idx = Number(document.getElementById("stepSelect").value);
-  if (idx <= 0) return;
-  try {
-    const d = rewind(idx - 1);
-    document.getElementById("lastResult").innerHTML = "<i>Undo</i>";
-    applyPayloadCommon(d);
-  } catch (e) {
-    alert("Error: " + e.message);
-  }
-};
-
-document.getElementById("stepSelect").onchange = () => {
-  document.getElementById("undoBtn").disabled = Number(document.getElementById("stepSelect").value) === 0;
-};
+function renderRewindBar() {
+  const slider = document.getElementById('rewind-slider');
+  slider.max = gameState.snapshots.length - 1;
+  slider.value = gameState.stepIndex;
+  document.getElementById('rewind-step-label').textContent =
+    gameState.stepIndex === 0 ? 'Start' : `Step ${gameState.stepIndex}`;
+}
 </script>
 </body>
 </html>
