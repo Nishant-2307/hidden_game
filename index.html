@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Hidden Card Game — Demo</title>
+  <style>
+    body { font-family: 'Segoe UI', Tahoma, sans-serif; margin:0; background:#f1f5f9; color:#1e293b; }
+    header { background:#2563eb; color:#fff; padding:18px 20px; font-size:24px; font-weight:700; box-shadow:0 3px 10px rgba(0,0,0,.15); }
+    main { max-width:1100px; margin:24px auto; padding:0 16px; }
+    section { background:#fff; border-radius:12px; padding:16px; box-shadow:0 4px 12px rgba(0,0,0,.08); margin-bottom:18px; }
+    h3 { margin:8px 0 12px; }
+    .controls { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    button { background:#2563eb; color:#fff; border:none; border-radius:8px; padding:10px 14px; font-size:15px; cursor:pointer; }
+    button:disabled { background:#94a3b8; cursor:not-allowed; }
+    select,input { padding:8px; border-radius:8px; border:1px solid #cbd5e1; }
+    #historyLog p { background:#f8fafc; margin:6px 0; padding:10px; border-left:4px solid #2563eb; border-radius:4px; }
+    #lastResult { background:#f0fdfa; padding:12px; border-left:4px solid #14b8a6; border-radius:8px; margin-top:10px; }
+    details { border:1px solid #e2e8f0; border-radius:8px; padding:8px 12px; background:#f8fafc; margin-bottom:10px; }
+    .entropyBox { margin-top:10px; padding:8px; background:#eef2ff; border-radius:6px; }
+    .distributionBar { height:10px; background:#c7d2fe; border-radius:6px; }
+    .muted { color:#475569; }
+    .small { font-size:13px; color:#475569; }
+    table { border-collapse: collapse; width:100%; }
+    td,th { padding:6px 8px; border-bottom:1px solid #edf2f7; }
+  </style>
+</head>
+<body>
+<header>Hidden Card Game — Demo</header>
+<main>
+
+  <section>
+    <h3>Strategy</h3>
+    <div class="controls">
+      <label for="strategySelect">Mode:</label>
+      <select id="strategySelect">
+        <option value="info">Information gain (original)</option>
+        <option value="shannon">Shannon entropy</option>
+      </select>
+      <button id="applyStrategyBtn">Apply</button>
+      <div id="strategyDescription" class="muted small">Using Information gain heuristic</div>
+    </div>
+  </section>
+
+  <section>
+    <h3>Card Distribution</h3>
+    <div class="controls">
+      <button id="setRandomBtn">Random Distribution</button>
+      <button id="setCustomBtn">Apply Custom</button>
+      <label for="p0_input">P0:</label><input id="p0_input" placeholder="1,2,3">
+      <label for="p1_input">P1:</label><input id="p1_input" placeholder="4,5,6">
+      <label for="p2_input">P2:</label><input id="p2_input" placeholder="7,8,9">
+      <label for="hidden_input">Hidden:</label><input id="hidden_input" placeholder="">
+    </div>
+    <p id="hand" class="muted"></p>
+  </section>
+
+  <section>
+    <h3>Ask (You are Player 0)</h3>
+    <div class="controls">
+      <label for="playerSelect">Ask Player:</label>
+      <select id="playerSelect"><option value="1">Player 1</option><option value="2">Player 2</option></select>
+
+      <label for="querySelect">Query:</label>
+      <select id="querySelect"></select>
+
+      <button id="askBtn" disabled>Ask</button>
+    </div>
+
+    <div id="queryEvaluation" class="entropyBox"></div>
+    <div id="lastResult"></div>
+  </section>
+
+  <section>
+    <h3>Shannon Distribution (P0's POV)</h3>
+    <div id="probDist"></div>
+  </section>
+
+  <section>
+    <h3>Query Scores (top first)</h3>
+    <div id="queryScores"></div>
+  </section>
+
+  <section>
+    <h3>Recommendation</h3>
+    <div id="recommendation">No recommendation yet.</div>
+  </section>
+
+  <section>
+    <h3>Rewind / Time Travel</h3>
+    <div class="controls">
+      <label for="stepSelect">Jump to:</label>
+      <select id="stepSelect"></select>
+      <button id="goStepBtn" disabled>Go</button>
+      <button id="undoBtn" disabled>Undo</button>
+    </div>
+    <div id="stepMeta" class="muted small"></div>
+  </section>
+
+  <section>
+    <h3>P0 Belief & Confirmed</h3>
+    <div id="beliefP0" class="small"></div>
+    <div id="knownCards"></div>
+  </section>
+
+  <section>
+    <h3>Bot Thinking</h3>
+    <details><summary>Bot 1</summary><div><p><b>Possible hidden:</b> <span id="beliefBot1">-</span></p>
+      <p><b>Confirmed:</b></p>
+      <ul><li>P0: <span id="knownBot1_P0">-</span></li><li>P1: <span id="knownBot1_P1">-</span></li><li>P2: <span id="knownBot1_P2">-</span></li></ul></div></details>
+
+    <details><summary>Bot 2</summary><div><p><b>Possible hidden:</b> <span id="beliefBot2">-</span></p>
+      <p><b>Confirmed:</b></p>
+      <ul><li>P0: <span id="knownBot2_P0">-</span></li><li>P1: <span id="knownBot2_P1">-</span></li><li>P2: <span id="knownBot2_P2">-</span></li></ul></div></details>
+  </section>
+
+  <section>
+    <h3>History</h3>
+    <div id="historyLog"></div>
+  </section>
+
+</main>
+
+<script>
+// ---------- GAME LOGIC PORTED FROM PYTHON ----------
+// Constants
+const CARDS = new Set(Array.from({length: 10}, (_, i) => i + 1));
+const PLAYERS = 3;
+const CARDS_PER_PLAYER = 3;
+const QUERY_CARDS = [
+    new Set([1, 2, 3, 4]),
+    new Set([1, 5, 6, 7]),
+    new Set([2, 5, 8, 9]),
+    new Set([3, 6, 8, 10]),
+    new Set([4, 7, 9, 10]),
+];
+
+// Utility functions
+function combinations(arr, r) {
+    if (r === 0) return [[]];
+    if (arr.length === 0) return [];
+    const [first, ...rest] = arr;
+    const withFirst = combinations(rest, r - 1).map(comb => [first, ...comb]);
+    const withoutFirst = combinations(rest, r);
+    return [...withFirst, ...withoutFirst];
+}
+
+function* fill(players, cards) {
+    if (!players.length) {
+        yield {};
+        return;
+    }
+    const p = players[0];
+    const need = CARDS_PER_PLAYER - (game_state.known_hands[p] ? game_state.known_hands[p].size : 0);
+    for (const combo of combinations([...cards], need)) {
+        const rest = cards.filter(c => !combo.includes(c));
+        for (const r of fill(players.slice(1), rest)) {
+            yield { [p]: new Set(combo), ...r };
+        }
+    }
+}
+
+// Possible worlds generator
+function possible_worlds(known_hands, answers) {
+    const unknown_cards = new Set([...CARDS].filter(c => ![...known_hands.values()].some(s => s.has(c))));
+    const hidden_candidates = [...unknown_cards];
+    const possible = [];
+
+    for (const hidden of hidden_candidates) {
+        const remaining_cards = new Set([...unknown_cards].filter(c => c !== hidden));
+        const unknown_players = Array.from({length: PLAYERS}, (_, i) => i).filter(p => (known_hands[p] ? known_hands[p].size : 0) < CARDS_PER_PLAYER);
+        for (const assignment of fill(unknown_players, [...remaining_cards])) {
+            const hands = {};
+            for (let p = 0; p < PLAYERS; p++) {
+                hands[p] = new Set([...(known_hands[p] || new Set()), ...(assignment[p] || [])]);
+            }
+            let valid = true;
+            for (const [asker, target, q_idx, response] of answers) {
+                const q = QUERY_CARDS[q_idx];
+                const intersection = new Set([...hands[target]].filter(c => q.has(c)));
+                if (intersection.size !== response) {
+                    valid = false;
+                    break;
+                }
+            }
+            if (valid) {
+                possible.push([hidden, hands]);
+            }
+        }
+    }
+    return possible;
+}
+
+// Deal cards
+function deal_cards() {
+    const all_cards = [...CARDS];
+    for (let i = all_cards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [all_cards[i], all_cards[j]] = [all_cards[j], all_cards[i]];
+    }
+    const hands = {};
+    for (let p = 0; p < PLAYERS; p++) {
+        hands[p] = new Set(all_cards.slice(p * CARDS_PER_PLAYER, (p + 1) * CARDS_PER_PLAYER));
+    }
+    const hidden = all_cards[PLAYERS * CARDS_PER_PLAYER];
+    return [hands, hidden];
+}
+
+// Scoring functions
+function score_max_split(worlds, query_index, asker, target) {
+    const answer_groups = new Map();
+    for (const [hidden, hands] of worlds) {
+        const ans = [...hands[target]].filter(c => QUERY_CARDS[query_index].has(c)).length;
+        if (!answer_groups.has(ans)) answer_groups.set(ans, new Set());
+        answer_groups.get(ans).add(hidden);
+    }
+    const total = new Set([...answer_groups.values()].flatMap(s => [...s]));
+    let score = 0;
+    for (const g of answer_groups.values()) {
+        score += g.size * (total.size - g.size);
+    }
+    return score;
+}
+
+function entropy_from_counts(counts) {
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
+    if (total === 0) return 0.0;
+    let ent = 0.0;
+    for (const c of counts.values()) {
+        const p = c / total;
+        if (p > 0) ent -= p * Math.log2(p);
+    }
+    return ent;
+}
+
+function score_shannon(worlds, query_index, asker, target) {
+    const hidden_counts = new Map();
+    for (const [h, _] of worlds) {
+        hidden_counts.set(h, (hidden_counts.get(h) || 0) + 1);
+    }
+    const prior_ent = entropy_from_counts(hidden_counts);
+
+    const answer_counts = new Map();
+    const subsets_hidden_counts = new Map();
+    for (const [h, hands] of worlds) {
+        const ans = [...hands[target]].filter(c => QUERY_CARDS[query_index].has(c)).length;
+        answer_counts.set(ans, (answer_counts.get(ans) || 0) + 1);
+        if (!subsets_hidden_counts.has(ans)) subsets_hidden_counts.set(ans, new Map());
+        subsets_hidden_counts.get(ans).set(h, (subsets_hidden_counts.get(ans).get(h) || 0) + 1);
+    }
+
+    const total = [...answer_counts.values()].reduce((a, b) => a + b, 0);
+    let expected_entropy = 0.0;
+    for (const [ans, cnt] of answer_counts) {
+        const p_ans = cnt / total;
+        const sub_counts = subsets_hidden_counts.get(ans);
+        const ent_sub = entropy_from_counts(sub_counts);
+        expected_entropy += p_ans * ent_sub;
+    }
+
+    const info_gain = prior_ent - expected_entropy;
+    return [info_gain, expected_entropy];
+}
+
+// Hidden distribution
+function hidden_distribution_for_player(known_hands, answers) {
+    const worlds = possible_worlds(known_hands, answers);
+    if (!worlds.length) return {};
+    const counts = new Map();
+    for (const [h, _] of worlds) {
+        counts.set(h, (counts.get(h) || 0) + 1);
+    }
+    const total = [...counts.values()].reduce((a, b) => a + b, 0);
+    const dist = {};
+    for (const [h, c] of counts) {
+        dist[h] = c / total;
+    }
+    return dist;
+}
+
+// Evaluate queries
+function evaluate_queries(known_hands, answers, asker, strategy = "score") {
+    const worlds = possible_worlds(known_hands, answers);
+    const results = [];
+    if (!worlds.length) return results;
+
+    const prior_counts = new Map();
+    for (const [h, _] of worlds) {
+        prior_counts.set(h, (prior_counts.get(h) || 0) + 1);
+    }
+    const prior_ent = entropy_from_counts(prior_counts);
+
+    for (let target = 0; target < PLAYERS; target++) {
+        if (target === asker) continue;
+        for (let q_idx = 0; q_idx < QUERY_CARDS.length; q_idx++) {
+            let score, ig, expected_ent;
+            if (strategy === "shannon") {
+                [ig, expected_ent] = score_shannon(worlds, q_idx, asker, target);
+                score = ig;
+            } else {
+                score = score_max_split(worlds, q_idx, asker, target);
+                ig = null;
+                expected_ent = null;
+            }
+            results.push({
+                target,
+                q_index: q_idx,
+                set: [...QUERY_CARDS[q_idx]].sort((a, b) => a - b),
+                score,
+                ig,
+                expected_entropy: expected_ent,
+                prior_entropy: prior_ent
+            });
+        }
+    }
+    results.sort((a, b) => (b.score || 0) - (a.score || 0));
+    return results;
+}
+
+// Suggest query
+function suggest_query(known_hands, answers, asker, strategy = "score") {
+    const worlds = possible_worlds(known_hands, answers);
+    if (!worlds.length) return [null, null];
+
+    let best = null;
+    let best_score = -1e9;
+
+    for (let target = 0; target < PLAYERS; target++) {
+        if (target === asker) continue;
+        for (let q_idx = 0; q_idx < QUERY_CARDS.length; q_idx++) {
+            let score;
+            if (strategy === "shannon") {
+                [score] = score_shannon(worlds, q_idx, asker, target);
+            } else {
+                score = score_max_split(worlds, q_idx, asker, target);
+            }
+            if (score > best_score) {
+                best_score = score;
+                best = [target, q_idx];
+            }
+        }
+    }
+    return [best, best_score];
+}
+
+// ---------- GLOBAL GAME STATE ----------
+let game_state = {
+    hands: null,
+    hidden: null,
+    answers: [],
+    known_hands: null,
+    history: [],
+    game_over: false,
+    snapshots: [],
+    step_index: 0,
+    strategy: "score"
+};
+
+// ---------- HELPERS ----------
+function _record_history(asker, target, q_index, response) {
+    const q_set = [...QUERY_CARDS[q_index]].sort((a, b) => a - b);
+    const entry = { who: `P${asker}`, asked: `Player ${target} about {${q_set.join(", ")}}`, got: response };
+    game_state.history.push(entry);
+    return entry;
+}
+
+function snapshot_label() {
+    const labels = ["Start"];
+    for (let i = 1; i <= game_state.history.length; i++) {
+        labels.push(`Step ${i}`);
+    }
+    return labels;
+}
+
+function take_snapshot() {
+    const snap = {
+        hands: game_state.hands ? Object.fromEntries(Object.entries(game_state.hands).map(([p, s]) => [p, [...s].sort((a, b) => a - b)])) : null,
+        hidden: game_state.hidden,
+        answers: [...game_state.answers],
+        known_hands: game_state.known_hands ? Object.fromEntries(Object.entries(game_state.known_hands).map(([p, s]) => [p, [...s].sort((a, b) => a - b)])) : null,
+        history: [...game_state.history],
+        game_over: game_state.game_over
+    };
+    if (game_state.step_index < game_state.snapshots.length - 1) {
+        game_state.snapshots = game_state.snapshots.slice(0, game_state.step_index + 1);
+    }
+    game_state.snapshots.push(snap);
+    game_state.step_index = game_state.snapshots.length - 1;
+}
+
+function restore_snapshot(idx) {
+    if (idx < 0 || idx >= game_state.snapshots.length) return false;
+    const snap = game_state.snapshots[idx];
+    game_state.hands = snap.hands ? Object.fromEntries(Object.entries(snap.hands).map(([p, arr]) => [p, new Set(arr)])) : null;
+    game_state.hidden = snap.hidden;
+    game_state.answers = [...snap.answers];
+    game_state.known_hands = snap.known_hands ? Object.fromEntries(Object.entries(snap.known_hands).map(([p, arr]) => [p, new Set(arr)])) : null;
+    game_state.history = [...snap.history];
+    game_state.game_over = snap.game_over;
+    game_state.step_index = idx;
+    return true;
+}
+
+function _check_winner() {
+    for (let p = 0; p < PLAYERS; p++) {
+        const kh = {0: new Set(), 1: new Set(), 2: new Set()};
+        kh[p] = new Set(game_state.known_hands[p]);
+        const worlds = possible_worlds(kh, game_state.answers);
+        const possible_hidden = [...new Set(worlds.map(([h, _]) => h))].sort((a, b) => a - b);
+        if (possible_hidden.length === 1) {
+            return [true, p, possible_hidden[0]];
+        }
+    }
+    return [false, null, null];
+}
+
+function beliefs_for_player(player_idx) {
+    const kh = {0: new Set(), 1: new Set(), 2: new Set()};
+    kh[player_idx] = new Set(game_state.known_hands[player_idx]);
+    const worlds = possible_worlds(kh, game_state.answers);
+    return [...new Set(worlds.map(([h, _]) => h))].sort((a, b) => a - b);
+}
+
+function get_certain_cards_player0_view() {
+    const kh = {0: new Set(), 1: new Set(), 2: new Set()};
+    kh[0] = new Set(game_state.known_hands[0]);
+    const worlds = possible_worlds(kh, game_state.answers);
+    const certain = {0: [], 1: [], 2: []};
+    for (let pl = 0; pl < PLAYERS; pl++) {
+        certain[pl] = [...new Set(worlds.flatMap(([_, hands]) => [...hands[pl]]).filter(card => worlds.every(([_, hands]) => hands[pl].has(card))))].sort((a, b) => a - b);
+    }
+    return certain;
+}
+
+function get_player_knowledge_all() {
+    const pk = {};
+    for (let p = 0; p < PLAYERS; p++) {
+        const kh = {0: new Set(), 1: new Set(), 2: new Set()};
+        kh[p] = new Set(game_state.known_hands[p]);
+        const worlds = possible_worlds(kh, game_state.answers);
+        const beliefs = [...new Set(worlds.map(([h, _]) => h))].sort((a, b) => a - b);
+        const certain = {};
+        for (let pl = 0; pl < PLAYERS; pl++) {
+            certain[pl] = [...new Set(worlds.flatMap(([_, hands]) => [...hands[pl]]).filter(card => worlds.every(([_, hands]) => hands[pl].has(card))))].sort((a, b) => a - b);
+        }
+        pk[p] = { beliefs, certain };
+    }
+    return pk;
+}
+
+function build_response_payload(bots_list, extra = null) {
+    const payload = {
+        you: null,
+        bots: bots_list,
+        history: [...game_state.history],
+        beliefs: { 0: beliefs_for_player(0) },
+        certain_cards: get_certain_cards_player0_view(),
+        player_knowledge: get_player_knowledge_all(),
+        step_index: game_state.step_index,
+        total_steps: game_state.snapshots.length,
+        step_labels: snapshot_label(),
+        game_over: game_state.game_over,
+        winner: null,
+        hidden_card: null,
+        final_hands: null,
+        strategy: game_state.strategy
+    };
+
+    if (game_state.history.length) {
+        let last_you = null;
+        for (const h of game_state.history.slice().reverse()) {
+            if (h.who === "P0") {
+                last_you = h;
+                break;
+            }
+        }
+        payload.you = last_you ? { asked: last_you.asked, response: last_you.got } : null;
+    }
+
+    if (game_state.game_over) {
+        const [over, who, card] = _check_winner();
+        payload.winner = who;
+        payload.hidden_card = card;
+        payload.final_hands = game_state.hands ? Object.fromEntries(Object.entries(game_state.hands).map(([p, s]) => [p, [...s].sort((a, b) => a - b)])) : null;
+    }
+
+    if (extra) {
+        Object.assign(payload, extra);
+    }
+    return payload;
+}
+
+// ---------- FUNCTIONS SIMULATING ROUTES ----------
+function set_strategy(strategy) {
+    if (!["score", "shannon", "info"].includes(strategy)) return { error: "Invalid strategy" };
+    if (strategy === "info") game_state.strategy = "score";
+    else game_state.strategy = strategy;
+    return { strategy: game_state.strategy };
+}
+
+function start(mode = "random", custom_hands = null, hidden = null) {
+    let hands, hid;
+    if (mode === "random") {
+        [hands, hid] = deal_cards();
+    } else {
+        // custom
+        const seen = new Set();
+        hands = {};
+        for (let p = 0; p < PLAYERS; p++) {
+            const arr = custom_hands[p].map(Number);
+            hands[p] = new Set(arr);
+            for (const c of arr) {
+                if (seen.has(c)) throw new Error(`Duplicate card ${c}`);
+                seen.add(c);
+            }
+        }
+        if (hidden === null) {
+            const all_cards = new Set([...CARDS]);
+            const leftover = [...all_cards].filter(c => !seen.has(c));
+            if (leftover.length !== 1) throw new Error("Cannot deduce hidden card");
+            hid = leftover[0];
+        } else {
+            hid = Number(hidden);
+            if (seen.has(hid)) throw new Error("Hidden card appears in hands");
+        }
+    }
+
+    game_state.hands = Object.fromEntries(Object.entries(hands).map(([p, s]) => [p, new Set(s)]));
+    game_state.hidden = hid;
+    game_state.answers = [];
+    game_state.known_hands = Object.fromEntries(Object.entries(hands).map(([p, s]) => [p, new Set(s)]));
+    game_state.history = [];
+    game_state.game_over = false;
+    game_state.snapshots = [];
+    game_state.step_index = 0;
+    take_snapshot();
+
+    const extra = {
+        shannon_dist: hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers),
+        query_scores: [],
+        recommendation: null
+    };
+
+    return {
+        your_hand: [...game_state.hands[0]].sort((a, b) => a - b),
+        query_cards: QUERY_CARDS.map(q => [...q].sort((a, b) => a - b)),
+        step_index: game_state.step_index,
+        total_steps: game_state.snapshots.length,
+        step_labels: snapshot_label(),
+        history: game_state.history,
+        beliefs: { 0: beliefs_for_player(0) },
+        certain_cards: { 0: [], 1: [], 2: [] },
+        player_knowledge: get_player_knowledge_all(),
+        game_over: false,
+        final_hands: null,
+        shannon_dist: extra.shannon_dist,
+        query_scores: extra.query_scores,
+        recommendation: extra.recommendation,
+        strategy: game_state.strategy
+    };
+}
+
+function ask(asker, target, query, strategy) {
+    if (game_state.game_over) throw new Error("Game already over");
+
+    const q_set = QUERY_CARDS[query];
+    const response = [...game_state.hands[target]].filter(c => q_set.has(c)).length;
+    game_state.answers.push([asker, target, query, response]);
+    _record_history(asker, target, query, response);
+    take_snapshot();
+
+    let [over, who, card] = _check_winner();
+    if (over) {
+        game_state.game_over = true;
+        const payload = build_response_payload([], {
+            shannon_dist: hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers),
+            query_scores: evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy),
+            recommendation: evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy)[0] || null
+        });
+        return payload;
+    }
+
+    // Bot 1
+    const [bot1_choice] = suggest_query({0: new Set(), 1: new Set(game_state.known_hands[1]), 2: new Set()}, game_state.answers, 1, strategy);
+    let bot1 = null;
+    if (bot1_choice) {
+        const [t1, q1] = bot1_choice;
+        const resp1 = [...game_state.hands[t1]].filter(c => QUERY_CARDS[q1].has(c)).length;
+        game_state.answers.push([1, t1, q1, resp1]);
+        _record_history(1, t1, q1, resp1);
+        take_snapshot();
+        bot1 = { bot: 1, asked: `Player ${t1} about {${[...QUERY_CARDS[q1]].sort((a, b) => a - b).join(", ")}}`, response: resp1 };
+    }
+
+    [over, who, card] = _check_winner();
+    if (over) {
+        game_state.game_over = true;
+        const payload = build_response_payload([bot1].filter(b => b), {
+            shannon_dist: hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers),
+            query_scores: evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy),
+            recommendation: evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy)[0] || null
+        });
+        return payload;
+    }
+
+    // Bot 2
+    const [bot2_choice] = suggest_query({0: new Set(), 1: new Set(), 2: new Set(game_state.known_hands[2])}, game_state.answers, 2, strategy);
+    let bot2 = null;
+    if (bot2_choice) {
+        const [t2, q2] = bot2_choice;
+        const resp2 = [...game_state.hands[t2]].filter(c => QUERY_CARDS[q2].has(c)).length;
+        game_state.answers.push([2, t2, q2, resp2]);
+        _record_history(2, t2, q2, resp2);
+        take_snapshot();
+        bot2 = { bot: 2, asked: `Player ${t2} about {${[...QUERY_CARDS[q2]].sort((a, b) => a - b).join(", ")}}`, response: resp2 };
+    }
+
+    [over, who, card] = _check_winner();
+    if (over) {
+        game_state.game_over = true;
+    }
+
+    const shannon_dist = hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers);
+    const query_scores = evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, strategy);
+    const recommendation = query_scores[0] || null;
+
+    return build_response_payload([bot1, bot2].filter(b => b), {
+        shannon_dist,
+        query_scores,
+        recommendation
+    });
+}
+
+function rewind(step) {
+    const ok = restore_snapshot(step);
+    if (!ok) throw new Error("Invalid step index");
+
+    const shannon_dist = hidden_distribution_for_player({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers);
+    const query_scores = evaluate_queries({0: new Set(game_state.known_hands[0]), 1: new Set(), 2: new Set()}, game_state.answers, 0, game_state.strategy);
+    const recommendation = query_scores[0] || null;
+
+    return {
+        history: game_state.history,
+        beliefs: { 0: beliefs_for_player(0) },
+        certain_cards: get_certain_cards_player0_view(),
+        player_knowledge: get_player_knowledge_all(),
+        step_index: game_state.step_index,
+        total_steps: game_state.snapshots.length,
+        step_labels: snapshot_label(),
+        game_over: game_state.game_over,
+        winner: null,
+        hidden_card: game_state.hidden,
+        final_hands: game_state.game_over ? Object.fromEntries(Object.entries(game_state.hands).map(([p, s]) => [p, [...s].sort((a, b) => a - b)])) : null,
+        shannon_dist,
+        query_scores,
+        recommendation,
+        strategy: game_state.strategy
+    };
+}
+
+// ---------- UI FUNCTIONS ----------
+let QUERY_CARDS_UI = [];
+let currentStrategy = "info";
+
+function renderQueryOptions(list) {
+  const sel = document.getElementById("querySelect");
+  sel.innerHTML = "";
+  list.forEach((q, i) => sel.innerHTML += `<option value="${i}">{${q.join(", ")}}</option>`);
+}
+
+function renderProbabilityDist(dist) {
+  const box = document.getElementById("probDist");
+  box.innerHTML = "";
+  if (!dist) {
+    box.innerHTML = "<i>No distribution</i>";
+    return;
+  }
+  Object.entries(dist).sort(([a], [b]) => a - b).forEach(([card, p]) => {
+    box.innerHTML += `<div><b>${card}:</b> ${(p * 100).toFixed(1)}% <div class="distributionBar" style="width:${Math.max(2, p * 100)}%"></div></div>`;
+  });
+}
+
+function renderQueryScores(scores) {
+  const box = document.getElementById("queryScores");
+  box.innerHTML = "";
+  if (!scores || scores.length === 0) {
+    box.innerHTML = "<i>No scores computed</i>";
+    return;
+  }
+  const rows = scores.map(s => `<tr><td>P${s.target}</td><td>{${s.set.join(", ")}}</td><td>${(s.score || 0).toFixed(3)}</td><td>${s.ig !== null ? (s.ig || 0).toFixed(3) : "-"}</td><td>${s.expected_entropy !== null ? s.expected_entropy.toFixed(3) : "-"}</td></tr>`).join("");
+  box.innerHTML = `<table><thead><tr><th>Target</th><th>Query</th><th>Score</th><th>IG</th><th>Exp H</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderRecommendation(rec) {
+  const div = document.getElementById("recommendation");
+  if (!rec) {
+    div.innerHTML = "<i>No recommendation</i>";
+    return;
+  }
+  div.innerHTML = `<b>Ask Player ${rec.target}</b> about {${rec.set.join(", ")}} — score=${(rec.score || 0).toFixed(3)} ${rec.ig !== null ? "IG=" + rec.ig.toFixed(3) : ""}`;
+}
+
+function renderHistory(hist) {
+  const box = document.getElementById("historyLog");
+  box.innerHTML = "";
+  hist.forEach(h => box.innerHTML += `<p>${h.who} asked ${h.asked} → <b>${h.got}</b></p>`);
+}
+
+function renderP0Belief(beliefs) {
+  document.getElementById("beliefP0").textContent = beliefs && beliefs[0] ? `[${beliefs[0].join(", ")}]` : "Unknown";
+}
+
+function renderKnown(certain) {
+  const div = document.getElementById("knownCards");
+  let html = "";
+  if (certain[0] && certain[0].length) html += `<p><b>You:</b> ${certain[0].join(", ")}</p>`;
+  if (certain[1] && certain[1].length) html += `<p><b>P1:</b> ${certain[1].join(", ")}</p>`;
+  if (certain[2] && certain[2].length) html += `<p><b>P2:</b> ${certain[2].join(", ")}</p>`;
+  div.innerHTML = html || "<i>No confirmed knowledge yet</i>";
+}
+
+function renderBotKnowledge(pk) {
+  if (!pk) return;
+  document.getElementById("beliefBot1").textContent = pk[1].beliefs.join(", ") || "-";
+  document.getElementById("beliefBot2").textContent = pk[2].beliefs.join(", ") || "-";
+  for (let p = 0; p < PLAYERS; p++) {
+    document.getElementById(`knownBot1_P${p}`).textContent = pk[1].certain[p].join(", ") || "-";
+    document.getElementById(`knownBot2_P${p}`).textContent = pk[2].certain[p].join(", ") || "-";
+  }
+}
+
+function renderStepMeta(idx, total, labels) {
+  document.getElementById("stepMeta").textContent = `Step ${idx} / ${total - 1}`;
+  const sel = document.getElementById("stepSelect");
+  sel.innerHTML = "";
+  (labels || []).forEach((lab, i) => {
+    const o = document.createElement("option");
+    o.value = i;
+    o.textContent = lab;
+    if (i === idx) o.selected = true;
+    sel.appendChild(o);
+  });
+  document.getElementById("goStepBtn").disabled = total <= 1;
+  document.getElementById("undoBtn").disabled = (Number(sel.value) === 0);
+}
+
+function applyPayloadCommon(data) {
+  renderHistory(data.history);
+  renderP0Belief(data.beliefs);
+  renderKnown(data.certain_cards);
+  renderBotKnowledge(data.player_knowledge);
+  renderStepMeta(data.step_index, data.total_steps, data.step_labels);
+  renderProbabilityDist(data.shannon_dist);
+  renderQueryScores(data.query_scores);
+  renderRecommendation(data.recommendation);
+  document.getElementById("askBtn").disabled = !!data.game_over;
+  if (data.game_over) {
+    document.getElementById("lastResult").innerHTML += `<br><h3>🎉 Game Over — Player ${data.winner} discovered the hidden card: ${data.hidden_card}</h3>`;
+  }
+}
+
+// ---------- EVENT HANDLERS ----------
+document.getElementById("applyStrategyBtn").onclick = () => {
+  const s = document.getElementById("strategySelect").value;
+  currentStrategy = s;
+  document.getElementById("strategyDescription").textContent = s === "info" ? "Using Information gain heuristic" : "Using Shannon entropy scoring";
+  set_strategy(s);
+};
+
+document.getElementById("setRandomBtn").onclick = () => {
+  try {
+    const d = start("random");
+    document.getElementById("hand").textContent = "Your cards: " + d.your_hand.join(", ");
+    QUERY_CARDS_UI = d.query_cards;
+    renderQueryOptions(QUERY_CARDS_UI);
+    applyPayloadCommon(d);
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+};
+
+document.getElementById("setCustomBtn").onclick = () => {
+  const p0 = document.getElementById("p0_input").value.split(",").map(x => x.trim()).filter(x => x !== "").map(Number);
+  const p1 = document.getElementById("p1_input").value.split(",").map(x => x.trim()).filter(x => x !== "").map(Number);
+  const p2 = document.getElementById("p2_input").value.split(",").map(x => x.trim()).filter(x => x !== "").map(Number);
+  const hidden = document.getElementById("hidden_input").value.trim() || null;
+  try {
+    const d = start("custom", {0: p0, 1: p1, 2: p2}, hidden);
+    document.getElementById("hand").textContent = "Your cards: " + d.your_hand.join(", ");
+    QUERY_CARDS_UI = d.query_cards;
+    renderQueryOptions(QUERY_CARDS_UI);
+    applyPayloadCommon(d);
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+};
+
+document.getElementById("askBtn").onclick = () => {
+  const target = Number(document.getElementById("playerSelect").value);
+  const query = Number(document.getElementById("querySelect").value);
+  try {
+    const d = ask(0, target, query, currentStrategy);
+    let out = "";
+    if (d.you) out += `<b>You:</b> asked ${d.you.asked} → <b>${d.you.response}</b><br>`;
+    (d.bots || []).forEach(b => out += `<b>Bot ${b.bot}:</b> asked ${b.asked} → <b>${b.response}</b><br>`);
+    document.getElementById("lastResult").innerHTML = out;
+    applyPayloadCommon(d);
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+};
+
+document.getElementById("goStepBtn").onclick = () => {
+  const idx = Number(document.getElementById("stepSelect").value);
+  try {
+    const d = rewind(idx);
+    document.getElementById("lastResult").innerHTML = "<i>Rewound</i>";
+    applyPayloadCommon(d);
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+};
+
+document.getElementById("undoBtn").onclick = () => {
+  const idx = Number(document.getElementById("stepSelect").value);
+  if (idx <= 0) return;
+  try {
+    const d = rewind(idx - 1);
+    document.getElementById("lastResult").innerHTML = "<i>Undo</i>";
+    applyPayloadCommon(d);
+  } catch (e) {
+    alert("Error: " + e.message);
+  }
+};
+
+document.getElementById("stepSelect").onchange = () => {
+  document.getElementById("undoBtn").disabled = Number(document.getElementById("stepSelect").value) === 0;
+};
+</script>
+</body>
+</html>
